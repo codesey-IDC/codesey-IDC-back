@@ -1,0 +1,84 @@
+{
+    "generated_at": "2026-10-18T07:55:16+00:00",
+    "data_path": "data/synthetic_idc_90d.parquet",
+    "target": "it_power_kw",
+    "resample_rule": "h",
+    "alpha": 0.1,
+    "min_history_hours": 168,
+    "splits_day": {
+        "train": [
+            1,
+            63
+        ],
+        "val": [
+            64,
+            76
+        ],
+        "test": [
+            77,
+            90
+        ]
+    },
+    "data_period": {
+        "start": "2026-03-15 00:00:00",
+        "end": "2026-06-12 23:00:00"
+    },
+    "train_target_range_kw": {
+        "min": 2389.2635870810004,
+        "max": 3457.182593383133
+    },
+    "train_hourly_target_range_kw": {
+        "min": 2678.199263998689,
+        "max": 3104.129783500852
+    },
+    "lgb_params": {
+        "n_estimators": 400,
+        "learning_rate": 0.03,
+        "num_leaves": 15,
+        "min_child_samples": 50,
+        "subsample": 0.8,
+        "subsample_freq": 1,
+        "colsample_bytree": 0.8,
+        "random_state": 42,
+        "verbose": -1
+    },
+    "models": {
+        "24h": {
+            "max_h": 24,
+            "features": [
+                "h",
+                "last_value",
+                "rolling_mean_24h",
+                "lag_168",
+                "lag_24",
+                "hour",
+                "dayofweek",
+                "is_weekend"
+            ],
+            "cqr_offset_kw": 14.386935942130094,
+            "files": {
+                "q05": "it_load_24h_q05.txt",
+                "q50": "it_load_24h_q50.txt",
+                "q95": "it_load_24h_q95.txt"
+            }
+        },
+        "168h": {
+            "max_h": 168,
+            "features": [
+                "h",
+                "last_value",
+                "rolling_mean_24h",
+                "lag_168",
+                "hour",
+                "dayofweek",
+                "is_weekend"
+            ],
+            "cqr_offset_kw": 8.890933560114263,
+            "files": {
+                "q05": "it_load_168h_q05.txt",
+                "q50": "it_load_168h_q50.txt",
+                "q95": "it_load_168h_q95.txt"
+            }
+        }
+    }
+}

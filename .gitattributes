@@ -1,0 +1,5 @@
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.parquet filter=lfs diff=lfs merge=lfs -text
+
+# LightGBM 모델 텍스트 파일: 줄바꿈 변환 금지 (Windows CRLF 변환 시 LightGBM 이 읽지 못함)
+output/forecast/models/*.txt -text
