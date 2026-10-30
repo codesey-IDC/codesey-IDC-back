@@ -1,0 +1,26 @@
+{
+    "24h": {
+        "n_estimators": 450,
+        "learning_rate": 0.013900070498267643,
+        "num_leaves": 33,
+        "min_child_samples": 108,
+        "subsample": 0.7917654892055768,
+        "subsample_freq": 1,
+        "colsample_bytree": 0.7751529317382134,
+        "reg_lambda": 0.9939882096447338,
+        "random_state": 42,
+        "verbose": -1
+    },
+    "168h": {
+        "n_estimators": 800,
+        "learning_rate": 0.005574858392595936,
+        "num_leaves": 43,
+        "min_child_samples": 25,
+        "subsample": 0.5431696994699396,
+        "subsample_freq": 1,
+        "colsample_bytree": 0.9957592918241597,
+        "reg_lambda": 2.4216701615040477,
+        "random_state": 42,
+        "verbose": -1
+    }
+}

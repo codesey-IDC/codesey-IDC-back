@@ -76,7 +76,7 @@ IT 부하 예측값 = 냉각 부하 예측값 이다. (별도 모델 없음)
     q05 = 하한, q50 = 중앙값(대표 예측), q95 = 상한
   파라미터: n_estimators 400, learning_rate 0.03, num_leaves 15,
             min_child_samples 50, subsample 0.8, colsample_bytree 0.8
-  (튜닝 안 한 고정값)
+  (처음엔 튜닝 없이 정한 고정값. Optuna 튜닝 후에도 그대로 유지 → 11번 참고)
 
 [CQR 보정]
   보정 전 90% 구간 적중률이 Val 에서 83% 로 부족
@@ -184,7 +184,9 @@ output/forecast/
   - Test 가 14일(336시간)뿐이라 168h 예측의 독립 평가 구간이 2개 수준.
   - CQR 은 데이터 독립을 가정하지만, 여기선 같은 시각을 여러 h 에서
     겹쳐 예측하므로 완전히 성립하지 않는다 (근사).
-  - 하이퍼파라미터는 튜닝하지 않았다.
+  - 하이퍼파라미터를 Optuna 로 50회 튜닝했지만 Test 성능이 좋아지지 않아
+    고정값을 유지했다 (11번). 데이터가 단순해서 설정값이 성능에 거의
+    영향을 주지 않는다.
   - 기상 피처를 다시 켜면 미래 외기를 실측값으로 쓰는 것이므로
     "perfect forecast 가정"을 명시해야 한다.
   - 기상 피처 제외 결정 이전에 Test 결과를 한 번 출력했다.
@@ -234,3 +236,45 @@ output/forecast/
     access violation 으로 죽는다. pyarrow 26 이상으로 해결 (requirements.txt 반영).
   - Windows git(core.autocrlf=true) 이 모델 txt 를 CRLF 로 바꾸면 LightGBM 이 못 읽는다.
     .gitattributes 에 변환 금지 추가했고, predictor 도 읽을 때 LF 로 정규화한다.
+
+
+--------------------------------------------------------------
+11. 하이퍼파라미터 튜닝 (Optuna)
+--------------------------------------------------------------
+[파일]
+  tune_forecast.py                 튜닝 스크립트 (train_forecast.py 의 데이터·피처·분할 함수 재사용)
+  output/forecast/tuning/
+    best_params.json               모델별 최적 조합 (Val 기준)
+    comparison.json                기존 고정값 vs 튜닝값 최종 지표
+    trials_24h.csv / trials_168h.csv   시도별 파라미터와 Val MAPE 전체 기록
+
+[실행]
+  python tune_forecast.py                  # 24h, 168h 각 30회 (약 2~3분, CPU)
+  python tune_forecast.py --trials 50
+  python tune_forecast.py --horizon 24h    # 한 모델만
+  ※ 운영 모델(output/forecast/models/)은 덮어쓰지 않는다.
+    채택하려면 best_params.json 값을 train_forecast.py 의 LGB_PARAMS 에 옮기고 다시 학습.
+
+[방법]
+  1) q50 모델만 Train 으로 학습, Val MAPE 로 조합 비교 (Test 는 선택에 사용 안 함)
+  2) 첫 시도는 기존 고정값 → 같은 조건의 "튜닝 전" 기준.
+     이 시도의 Test 결과가 metrics.json 과 정확히 같아 학습 절차 재현도 확인됨
+  3) 최적 조합으로 q05/q50/q95 재학습 → Val 에서 CQR 보정 → Test 1회 평가
+  탐색 범위: n_estimators 100~1500, learning_rate 0.005~0.2, num_leaves 4~63,
+             min_child_samples 10~300, subsample 0.5~1.0, colsample_bytree 0.5~1.0,
+             reg_lambda 0.001~10   (TPE sampler, seed 42)
+
+[결과] (모델당 50회)
+                               24h 기존   24h 튜닝   168h 기존  168h 튜닝
+  Val MAPE (조합 비교 기준)     0.983%     0.970%     0.942%     0.922%
+  Test MAPE                     0.885%     0.902%     0.881%     0.889%
+  90% 적중률 (CQR 보정 후)      92.3%      90.6%      91.1%      90.9%
+  평균 구간 폭                  126.9kW    123.1kW    119.5kW    131.1kW
+
+[결론]
+  - Val 에서는 조금 좋아졌지만 Test 에서는 오히려 조금 나빠졌다
+    → 튜닝값이 Val 13일에 과하게 맞춰진 것. 기존 고정값 유지.
+  - 차이가 모두 0.02%p 이하: 데이터가 "1주 프로필 반복 + 노이즈"라서
+    하이퍼파라미터보다 데이터 구조가 성능을 결정한다.
+  - 발표용 한 줄: "Optuna 50회 튜닝 결과 Test MAPE 가 개선되지 않아(0.885→0.902%)
+    기존 설정을 유지함"

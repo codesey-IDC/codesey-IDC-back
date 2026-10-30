@@ -13,6 +13,7 @@ pyarrow>=26.0        # parquet 읽기/쓰기 (data/synthetic_idc_90d.parquet)
 # 예측 모델 (train_forecast.py)
 lightgbm>=4.0        # 분위수 회귀
 scikit-learn>=1.3    # lightgbm의 LGBMRegressor가 내부적으로 필요
+optuna>=4.0          # 하이퍼파라미터 튜닝 (tune_forecast.py)
 
 # 시각화
 plotly>=5.18         # 예측 결과 그래프, Streamlit 대시보드
