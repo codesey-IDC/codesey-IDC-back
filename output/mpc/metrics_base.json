@@ -1,0 +1,71 @@
+{
+    "start": "2026-05-30 00:00:00",
+    "hours": 336,
+    "scenario": "base",
+    "controllers": {
+        "fixed_20": {
+            "hours": 336,
+            "facility_energy_kwh": 1278425.871294401,
+            "cooling_energy_kwh": 254412.97347324432,
+            "fan_extra_energy_kwh": -5.4569682106375694e-12,
+            "it_energy_kwh": 975250.3788772919,
+            "average_pue": 1.3108693920899825,
+            "average_xfactor": 1.0,
+            "max_room_temp_c": 20.0,
+            "min_ride_through_min": 47.200844507369204,
+            "violation_hours": 0,
+            "setpoint_change_c_total": 0.0,
+            "fallback_hours": 0,
+            "naive_forecast_hours": 0,
+            "saving_vs_fixed_20_pct": 0.0
+        },
+        "fixed_26": {
+            "hours": 336,
+            "facility_energy_kwh": 1184969.0742437327,
+            "cooling_energy_kwh": 147324.65137855973,
+            "fan_extra_energy_kwh": 12982.40480382535,
+            "it_energy_kwh": 988232.7836811172,
+            "average_pue": 1.1990788949844213,
+            "average_xfactor": 1.2797764929045845,
+            "max_room_temp_c": 25.999999999999996,
+            "min_ride_through_min": 23.289890381925613,
+            "violation_hours": 0,
+            "setpoint_change_c_total": 6.0,
+            "fallback_hours": 0,
+            "naive_forecast_hours": 0,
+            "saving_vs_fixed_20_pct": 7.310302392116297
+        },
+        "reactive": {
+            "hours": 336,
+            "facility_energy_kwh": 1172079.1135225636,
+            "cooling_energy_kwh": 135642.1461307635,
+            "fan_extra_energy_kwh": 11832.447210136692,
+            "it_energy_kwh": 987082.8260874286,
+            "average_pue": 1.1874171878447304,
+            "average_xfactor": 1.1891114096964763,
+            "max_room_temp_c": 26.999999999999996,
+            "min_ride_through_min": 19.097444717263773,
+            "violation_hours": 0,
+            "setpoint_change_c_total": 269.0,
+            "fallback_hours": 0,
+            "naive_forecast_hours": 0,
+            "saving_vs_fixed_20_pct": 8.318570529565527
+        },
+        "mpc": {
+            "hours": 336,
+            "facility_energy_kwh": 1172421.8988747185,
+            "cooling_energy_kwh": 135678.65296893616,
+            "fan_extra_energy_kwh": 12124.14103297683,
+            "it_energy_kwh": 987374.5199102687,
+            "average_pue": 1.1874135652004334,
+            "average_xfactor": 1.2575995652913008,
+            "max_room_temp_c": 26.999999999999982,
+            "min_ride_through_min": 19.12572851517734,
+            "violation_hours": 0,
+            "setpoint_change_c_total": 118.85885454278429,
+            "fallback_hours": 0,
+            "naive_forecast_hours": 0,
+            "saving_vs_fixed_20_pct": 8.291757449522974
+        }
+    }
+}
