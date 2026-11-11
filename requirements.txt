@@ -17,6 +17,7 @@ optuna>=4.0          # 하이퍼파라미터 튜닝 (tune_forecast.py)
 
 # 시각화
 plotly>=5.18         # 예측 결과 그래프, Streamlit 대시보드
+streamlit>=1.50      # 통합 관제 대시보드 (dashboard/app.py)
 matplotlib>=3.7      # 기존 explore_data.py
 
 # 예측 API 서비스 (services/forecast)

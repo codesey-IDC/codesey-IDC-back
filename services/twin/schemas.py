@@ -1,7 +1,46 @@
 """twin-service Pydantic 스키마."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, model_validator
+
+
+class TelemetryResponse(BaseModel):
+    """가상 데이터센터의 시간별 계측값 (1시간 평균). 대시보드·MPC 시뮬레이션의 입력."""
+
+    timestamps: list[datetime]
+    it_power_kw: list[float]            # 실제 IT 부하
+    outdoor_temp_c: list[float]         # 외기온도
+    data_start: datetime                # 계측 데이터 전체 범위
+    data_end: datetime
+    unit: str = 'kW'
+
+
+class EsgRequest(BaseModel):
+    """시뮬레이션 결과 시계열 → ESG 지표. 배열 길이는 모두 같아야 한다."""
+
+    it_power_kw: list[float] = Field(min_length=1, max_length=50_000)
+    cooling_power_kw: list[float] = Field(min_length=1, max_length=50_000)
+    cooling_mode: list[str] = Field(min_length=1, max_length=50_000,
+                                    description="'free_cooling' | 'hybrid' | 'chiller'")
+    heat_removed_kw: list[float] | None = Field(default=None, description='생략 시 IT 전력과 같다고 본다')
+    dt_hours: float = Field(default=1.0, gt=0, le=24)
+
+
+class EsgResponse(BaseModel):
+    it_energy_mwh: float
+    cooling_energy_mwh: float
+    total_energy_mwh: float             # IT + 냉각 + 기타 손실
+    average_pue: float
+    carbon_tco2: float
+    cue_tco2_per_mwh: float             # 탄소 배출 / IT 전력량
+    water_usage_l: float
+    wue_l_per_kwh: float                # 물 사용량 / IT 전력량
+    water_by_mode_l: dict[str, float]
+    cooling_energy_by_mode_mwh: dict[str, float]
+    hours_by_mode: dict[str, float]
+    carbon_factor_tco2_per_mwh: float
 
 
 class SimulatePoint(BaseModel):

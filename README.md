@@ -7,6 +7,7 @@
 | 디지털 트윈 | `services/twin/` | 8001 | 가상 데이터센터. 부하·외기·설정 온도 → 냉각 전력, 서버실 온도, PUE (물리 공식) |
 | 예측 | `services/forecast/` | 8002 | 최근 IT 부하 → 앞으로 1~168시간 IT 부하 + 90% 범위 (LightGBM) |
 | MPC | `services/mpc/` | 8003 | 예측 + 트윈으로 24시간 계획을 세워 지금 적용할 공급 공기 설정 온도 결정 |
+| 대시보드 | `dashboard/` | 8501 | 통합 관제 화면 (Streamlit). 세 서비스를 REST 로만 호출 |
 
 ```
 대시보드 ──▶ MPC (:8003) ──▶ 예측 (:8002)
@@ -25,6 +26,9 @@
 
 Python 3.10 ~ 3.12.
 
+Windows 에서는 `pip install -r requirements.txt` 후 **`start.bat`** 을 더블클릭하면 서비스 3개와 대시보드가
+차례로 뜨고 브라우저가 열린다. 끌 때는 **`stop.bat`**. 직접 띄우려면 아래 명령을 쓴다.
+
 ```bash
 pip install -r requirements.txt
 
@@ -32,6 +36,9 @@ pip install -r requirements.txt
 uvicorn services.twin.main:app --port 8001
 uvicorn services.forecast.main:app --port 8002
 uvicorn services.mpc.main:app --port 8003
+
+# 대시보드 (세 서비스를 띄운 뒤) → http://127.0.0.1:8501
+streamlit run dashboard/app.py
 ```
 
 - 각 서비스의 요청·응답 형식과 직접 호출 화면: `http://127.0.0.1:<포트>/docs`
@@ -39,14 +46,14 @@ uvicorn services.mpc.main:app --port 8003
 - **주소는 `localhost` 대신 `127.0.0.1` 을 쓸 것.** Windows 에서 `localhost` 는 연결마다 약 2초 지연된다
   (MPC 한 번 호출이 0.3초 → 2~6초).
 
-테스트: `python -m pytest -q` (56개)
+테스트: `python -m pytest -q` (76개)
 
 ---
 
 ## 2. 대시보드에서 쓰는 법 (Streamlit)
 
 세 서비스 모두 **상태를 저장하지 않는다.** 요청에 필요한 값을 다 넣어 보내면 계산만 해서 돌려준다.
-지나간 기록(실측 데이터, 시뮬레이션 결과)은 API 가 아니라 파일로 있다 → 3절.
+지나간 기록(실측 데이터, 시뮬레이션 결과)은 파일로 있고(3절), 대시보드는 2-6 의 API 로 받는다.
 
 ```python
 import httpx
@@ -175,7 +182,41 @@ print(r['mode'], r['setpoint_c'], f"{r['expected_saving_pct']:.1f}%")   # mpc 24
 
 ---
 
-## 3. 파일로 있는 결과 (API 없음)
+### 2-6. 대시보드용 API (`dashboard/app.py` 가 쓰는 것)
+
+대시보드는 parquet/CSV 를 직접 읽지 않고 아래 API 만 호출한다.
+
+| API | 하는 일 |
+|---|---|
+| `GET :8001/api/v1/telemetry?start=&hours=` | 시간별 계측값(IT 부하·외기). `start` 생략 시 데이터 끝에서 `hours` 시간. 응답에 데이터 전체 범위(`data_start`, `data_end`) 포함 |
+| `POST :8001/api/v1/esg` | 시뮬레이션 결과 시계열(`it_power_kw`, `cooling_power_kw`, `cooling_mode`) → 탄소 배출(0.459 tCO2/MWh), CUE, 물 사용량, WUE, 냉각 방식별 물 사용량 |
+| `POST :8003/api/v1/simulate` | 폐루프 시뮬레이션. `start`, `hours`(최대 168), `controller`(`fixed_20`/`reactive`/`mpc`), `scenario` → 시간별 결과 + 요약 |
+| `GET :8003/api/v1/scenarios` | 위기 시나리오 목록과 조건 |
+| `GET :8003/api/v1/results?scenario=base` | 3절의 사전 계산 결과(`output/mpc/`)를 JSON 으로 |
+
+위기 시나리오 (`scenario`, 시작 시각부터 구간 끝까지 적용)
+
+| 값 | 조건 |
+|---|---|
+| `normal` | 변경 없음 |
+| `server_surge` | IT 부하 1.3배 |
+| `chiller_failure` | 냉각 용량 75% (`capacity_factor=0.75`) |
+| `heatwave` | 외기온도 최저 38℃ |
+
+```python
+r = client.post(f'{MPC}/api/v1/simulate', json={
+    'start': '2026-06-04T00:00:00', 'hours': 24, 'controller': 'mpc', 'scenario': 'heatwave'}, timeout=300).json()
+print(r['summary']['max_room_temp_c'], r['summary']['temp_ok'], r['summary']['average_pue'])
+ts = pd.DataFrame(r['timeseries'])      # timestamp, setpoint_c, room_temp_c, cooling_power_kw, pue, cooling_mode, ...
+```
+
+- `start` 는 데이터 시작 + 192시간 이후여야 한다 (예측 이력). 범위를 벗어나면 422.
+- MPC 는 1시간당 약 0.3초 걸린다 (24시간 ≈ 7초).
+- 물 원단위(칠러 1.8 · 혼합 1.0 · 외기 냉각 0.3 L/kWh)는 가정값이다 (`services/twin/esg.py`).
+
+---
+
+## 3. 파일로 있는 결과
 
 | 파일 | 내용 | 만드는 명령 |
 |---|---|---|
