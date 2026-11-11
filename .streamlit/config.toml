@@ -1,0 +1,9 @@
+# 대시보드 테마 (저장소 루트에서 `streamlit run dashboard/app.py` 로 실행할 때 적용)
+# 강조색을 파랑으로 둔다: 기본값(빨강)은 27℃ 경고선과 같은 색이라 경고가 묻힌다.
+
+[theme]
+base = "light"            # 그래프 색을 밝은 배경 기준으로 맞춰 두었다
+primaryColor = "#2a78d6"
+
+[browser]
+gatherUsageStats = false

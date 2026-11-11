@@ -24,6 +24,7 @@ MPC 5요소
 
 Fallback (mode = 'fallback', 기준 설정 온도 고정)
   트윈 서비스 호출 실패 — 계획을 평가할 수 없으므로 원본 데이터에서 검증된 기준 설정으로 돌아간다.
+  어떤 계획으로도 서버실 온도가 발산하는 경우(냉각 용량 < 발열)도 같다. 설정 온도로 해결할 수 없는 상황이다.
 """
 from __future__ import annotations
 
@@ -106,7 +107,8 @@ class MPCController:
             'capacity_factor': capacity_factor})
         if r.status_code != 200:
             raise TwinUnavailable(f'twin rollout/batch {r.status_code}: {r.text[:200]}')
-        return {k: np.asarray(v) for k, v in r.json().items()}
+        # 서버실 온도가 발산한 계획은 트윈이 null 을 돌려준다 → NaN 으로 받아 _cost 에서 탈락시킨다
+        return {k: np.asarray(v, dtype=float) for k, v in r.json().items()}
 
     def _trajectory(self, it_kw, outdoor_c, plan, room_c: float, capacity_factor: float) -> dict:
         r = self.twin.post('/api/v1/rollout', json={
@@ -126,10 +128,11 @@ class MPCController:
         c = self.config
         start = block_values[:, :1] if self._last_setpoint is None else np.full((len(block_values), 1), self._last_setpoint)
         moves = np.abs(np.diff(np.hstack([start, block_values]), axis=1)).sum(axis=1)
-        return (s['total_facility_energy_kwh']
+        cost = (s['total_facility_energy_kwh']
                 + c.violation_penalty_kwh * s['violation_steps']
                 + c.reliability_weight_kwh_per_h * (s['average_xfactor'] - 1.0) * c.horizon_hours
                 + c.move_weight_kwh_per_c * moves)
+        return np.where(np.isfinite(cost), cost, np.inf)
 
     def optimize(self, it_kw, outdoor_c, room_c: float, capacity_factor: float = 1.0
                  ) -> tuple[np.ndarray, float]:
@@ -159,6 +162,8 @@ class MPCController:
             elite = samples[order[:n_elite]]
             mean, std = elite.mean(axis=0), np.maximum(elite.std(axis=0), c.min_std_c)
 
+        if best_x is None:
+            raise TwinUnavailable('모든 후보 계획에서 서버실 온도가 발산 (냉각 용량이 발열보다 작음)')
         # 다음 시간 시작점: 한 시간 당긴 계획 (첫 블록 소비)
         self._warm = np.append(best_x[1:], best_x[-1]) if c.blocks[0] == 1 else best_x
         return self._expand(best_x[None, :])[0], best_cost

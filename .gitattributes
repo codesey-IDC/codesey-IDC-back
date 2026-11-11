@@ -3,3 +3,6 @@
 
 # LightGBM 모델 텍스트 파일: 줄바꿈 변환 금지 (Windows CRLF 변환 시 LightGBM 이 읽지 못함)
 output/forecast/models/*.txt -text
+
+# 배치 파일: 줄바꿈이 LF 로 바뀌면 cmd 에서 goto/call 이 깨질 수 있다
+*.bat text eol=crlf
