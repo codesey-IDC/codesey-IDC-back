@@ -3,6 +3,7 @@
 /data/external
 /output/*
 !/output/forecast/
+!/output/mpc/
 
 # python
 __pycache__/
