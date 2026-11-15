@@ -111,8 +111,8 @@ curl -X POST http://127.0.0.1:8002/api/v1/forecast -H "Content-Type: application
 | # | 요구사항 | 구현 | 상태 |
 |---|---|---|---|
 | 1 | Docker · README 아키텍처 · docs/ 열역학 수식 | `docker-compose.yml`, 이 문서, `docs/thermodynamics.md` | ✅ (Docker 실행 확인은 `docs/docker.md` 기록표) |
-| 2 | 데이터 파이프라인 | Google Trace 2019 기반 90일·5분 데이터, SPECpower, 파생 변수, 한전 현황 규모 | ✅ 데이터 / ⚠️ 기상청 API 수집·Trace 추출 코드는 데이터 레포 담당 |
-| 3 | 열역학 냉각 부하 모델 | `services/twin/physics.py` (Q = ṁc_pΔT, COP(외기), 외기 냉각, 칠러), NAVER PUE 1.09 비교 | ✅ / ⚠️ Sinergym 오차 10% 검증은 데이터 레포 담당 |
+| 2 | 데이터 파이프라인 | Google Trace 2019 기반 90일·5분 데이터, SPECpower, 파생 변수, 한전 현황 규모 | ✅ 데이터 / ⚠️ 기상청 API 수집·Trace 추출 코드 |
+| 3 | 열역학 냉각 부하 모델 | `services/twin/physics.py` (Q = ṁc_pΔT, COP(외기), 외기 냉각, 칠러), NAVER PUE 1.09 비교 | ✅ / ⚠️ Sinergym 오차 10% 검증 |
 | 4 | IT 부하 예측 (모델 2개 이상) | Ridge·LightGBM·1주 전 값 비교 (`scripts/compare_forecast_models.py`), Val 기준 선정 | ✅ |
 | 5 | 냉각 수요 예측 | `target=cooling_power`, nMAE 0.99%, 모드 적중률 99%, 외기 15℃ 이하 자연공조, 방식별 에너지 비교 | ✅ |
 | 6 | Rule-based 컨트롤러 | 고정 설정 + PID (`services/mpc/rule_based.py`), 외기 기반 Free Cooling, 유지율 100% | ✅ |
