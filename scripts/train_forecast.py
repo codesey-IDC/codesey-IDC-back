@@ -14,9 +14,10 @@ IT 부하 예측값이 곧 냉각 부하 예측값이다.
 피처 계산은 services/forecast/features.py 를 쓴다 (서빙 predictor 와 공용).
 
 실행:
-  python train_forecast.py                # 학습 + 평가 + 모델/지표/model_config.json 저장
-  python train_forecast.py --config-only  # 학습 없이 기존 모델·metrics.json 으로 model_config.json 만 생성
+  python scripts/train_forecast.py                # 학습 + 평가 + 모델/지표/model_config.json 저장
+  python scripts/train_forecast.py --config-only  # 학습 없이 model_config.json 만 생성
 """
+
 from __future__ import annotations
 
 import json
@@ -28,10 +29,16 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 저장소 루트
 from services.forecast.features import (  # noqa: E402
-    TARGET, WEATHER_COLS, HORIZONS, MIN_HISTORY_HOURS, RESAMPLE_RULE,
-    build_direct_dataset, feature_names, load_hourly,
+    TARGET,
+    WEATHER_COLS,
+    HORIZONS,
+    MIN_HISTORY_HOURS,
+    RESAMPLE_RULE,
+    build_direct_dataset,
+    feature_names,
+    load_hourly,
 )
 
 DATA_PATH = 'data/synthetic_idc_90d.parquet'
@@ -49,8 +56,14 @@ USE_WEATHER_FEATURES = False
 #  - cpu_utilization: it_power_kw를 계산한 원천 (SPECpower 공식)
 #  - 나머지: 냉각 제어 결과(사후 산출값)
 FORBIDDEN_FEATURES = {
-    'it_power_kw', 'cooling_load_kw', 'server_heat_kw', 'cpu_utilization',
-    'cooling_power_kw', 'free_cooling_fraction', 'cooling_mode', 'pue',
+    'it_power_kw',
+    'cooling_load_kw',
+    'server_heat_kw',
+    'cpu_utilization',
+    'cooling_power_kw',
+    'free_cooling_fraction',
+    'cooling_mode',
+    'pue',
 }
 
 SPLITS = {'train': (1, 63), 'val': (64, 76), 'test': (77, 90)}
@@ -84,8 +97,12 @@ def model_file(name: str, q: float) -> str:
     return f'it_load_{name}_q{int(q * 100):02d}.txt'
 
 
-def write_model_config(hourly: pd.DataFrame, train_range: dict[str, dict],
-                       offsets: dict[str, float], feats: dict[str, list[str]]) -> None:
+def write_model_config(
+    hourly: pd.DataFrame,
+    train_range: dict[str, dict],
+    offsets: dict[str, float],
+    feats: dict[str, list[str]],
+) -> None:
     """서빙(predictor)이 읽는 설정 파일. CQR offset·피처 순서·학습 범위를 모델 옆에 둔다."""
     config = {
         'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -143,16 +160,14 @@ def split(data: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """예측 시점과 목표 시점이 모두 같은 구간에 있는 행만 그 구간에 넣는다."""
     parts = {}
     for name, (lo, hi) in SPLITS.items():
-        mask = (data['origin_day'].between(lo, hi)
-                & data['target_day'].between(lo, hi))
+        mask = data['origin_day'].between(lo, hi) & data['target_day'].between(lo, hi)
         parts[name] = data[mask].reset_index(drop=True)
     assert parts['train']['target_time'].max() < parts['val']['origin_time'].min()
     assert parts['val']['target_time'].max() < parts['test']['origin_time'].min()
     return parts
 
 
-def fit_quantiles(train: pd.DataFrame,
-                  feats: list[str]) -> dict[float, lgb.LGBMRegressor]:
+def fit_quantiles(train: pd.DataFrame, feats: list[str]) -> dict[float, lgb.LGBMRegressor]:
     models = {}
     for q in QUANTILES:
         model = lgb.LGBMRegressor(objective='quantile', alpha=q, **LGB_PARAMS)
@@ -161,8 +176,9 @@ def fit_quantiles(train: pd.DataFrame,
     return models
 
 
-def predict(models: dict[float, lgb.LGBMRegressor], data: pd.DataFrame,
-            feats: list[str]) -> dict[float, np.ndarray]:
+def predict(
+    models: dict[float, lgb.LGBMRegressor], data: pd.DataFrame, feats: list[str]
+) -> dict[float, np.ndarray]:
     return {q: m.predict(data[feats]) for q, m in models.items()}
 
 
@@ -178,8 +194,9 @@ def mape(y: np.ndarray, pred: np.ndarray) -> float:
     return float(np.mean(np.abs(y - pred) / np.abs(y)) * 100)
 
 
-def evaluate(test: pd.DataFrame, preds: dict[float, np.ndarray],
-             offset: float, max_h: int) -> dict:
+def evaluate(
+    test: pd.DataFrame, preds: dict[float, np.ndarray], offset: float, max_h: int
+) -> dict:
     y = test['y'].to_numpy()
     lo, mid, hi = preds[0.05], preds[0.5], preds[0.95]
     lo_c, hi_c = lo - offset, hi + offset
@@ -219,7 +236,8 @@ def main() -> None:
     for name, max_h in HORIZONS.items():
         print(f'\n2. [{name}] 데이터셋 생성 (h = 1~{max_h})...')
         data = build_direct_dataset(
-            hourly, max_h, exog_cols=WEATHER_COLS if USE_WEATHER_FEATURES else None)
+            hourly, max_h, exog_cols=WEATHER_COLS if USE_WEATHER_FEATURES else None
+        )
         feats = feature_columns(data, max_h)
         parts = split(data)
         feats_by_model[name], train_parts[name] = feats, parts['train']
@@ -231,8 +249,7 @@ def main() -> None:
 
         print(f'4. [{name}] CQR 보정 (Val)...')
         val_pred = predict(models, parts['val'], feats)
-        offset = cqr_offset(val_pred[0.05], val_pred[0.95],
-                            parts['val']['y'].to_numpy())
+        offset = cqr_offset(val_pred[0.05], val_pred[0.95], parts['val']['y'].to_numpy())
         offsets[name] = offset
 
         print(f'5. [{name}] Test 평가...')
@@ -243,8 +260,7 @@ def main() -> None:
             print(f'   {k}: {v:.3f}' if isinstance(v, float) else f'   {k}: {v}')
 
         importance = pd.Series(models[0.5].feature_importances_, index=feats)
-        print('   q50 피처 중요도 상위 5:',
-              importance.nlargest(5).to_dict())
+        print('   q50 피처 중요도 상위 5:', importance.nlargest(5).to_dict())
 
         for q, model in models.items():
             model.booster_.save_model(os.path.join(MODEL_DIR, model_file(name, q)))
@@ -253,11 +269,9 @@ def main() -> None:
         out['q05'] = test_pred[0.05] - offset
         out['q50'] = test_pred[0.5]
         out['q95'] = test_pred[0.95] + offset
-        out.to_parquet(os.path.join(OUTPUT_DIR, f'test_pred_{name}.parquet'),
-                       index=False)
+        out.to_parquet(os.path.join(OUTPUT_DIR, f'test_pred_{name}.parquet'), index=False)
 
-    with open(os.path.join(OUTPUT_DIR, 'metrics.json'), 'w',
-              encoding='utf-8') as f:
+    with open(os.path.join(OUTPUT_DIR, 'metrics.json'), 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=4)
 
     print('\n6. model_config.json 저장...')

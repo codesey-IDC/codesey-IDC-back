@@ -1,0 +1,45 @@
+{
+    "generated_at": "2026-11-15T07:19:27+00:00",
+    "model": "ridge",
+    "ridge_alpha": 1.0,
+    "alpha": 0.1,
+    "models": {
+        "24h": {
+            "max_h": 24,
+            "features": [
+                "h",
+                "last_value",
+                "rolling_mean_24h",
+                "lag_168",
+                "lag_24",
+                "hour",
+                "dayofweek",
+                "is_weekend"
+            ],
+            "file": "ridge_24h.joblib",
+            "conformal_halfwidth_kw": 52.29802883017874,
+            "test": {
+                "mape": 0.8598109092239523,
+                "coverage_pct": 90.41731066460588
+            }
+        },
+        "168h": {
+            "max_h": 168,
+            "features": [
+                "h",
+                "last_value",
+                "rolling_mean_24h",
+                "lag_168",
+                "hour",
+                "dayofweek",
+                "is_weekend"
+            ],
+            "file": "ridge_168h.joblib",
+            "conformal_halfwidth_kw": 51.78702114534053,
+            "test": {
+                "mape": 0.8353856344383875,
+                "coverage_pct": 91.24775158572376
+            }
+        }
+    }
+}

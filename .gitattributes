@@ -6,3 +6,10 @@ output/forecast/models/*.txt -text
 
 # 배치 파일: 줄바꿈이 LF 로 바뀌면 cmd 에서 goto/call 이 깨질 수 있다
 *.bat text eol=crlf
+
+# Docker·설정 파일: Linux 컨테이너에서 쓰므로 항상 LF
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf

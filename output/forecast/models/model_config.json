@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-10-18T07:55:16+00:00",
+    "generated_at": "2026-11-15T09:38:54+00:00",
     "data_path": "data/synthetic_idc_90d.parquet",
     "target": "it_power_kw",
     "resample_rule": "h",
@@ -28,7 +28,7 @@
         "max": 3457.182593383133
     },
     "train_hourly_target_range_kw": {
-        "min": 2678.199263998689,
+        "min": 2678.1992639986884,
         "max": 3104.129783500852
     },
     "lgb_params": {
@@ -73,7 +73,7 @@
                 "dayofweek",
                 "is_weekend"
             ],
-            "cqr_offset_kw": 8.890933560114263,
+            "cqr_offset_kw": 8.890933560113353,
             "files": {
                 "q05": "it_load_168h_q05.txt",
                 "q50": "it_load_168h_q50.txt",

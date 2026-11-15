@@ -1,0 +1,25 @@
+# Docker 이미지에 넣지 않는 파일 (빌드를 빠르고 작게)
+.git
+.github
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.coverage
+htmlcov
+.venv
+venv
+.idea
+.vscode
+.DS_Store
+**/.DS_Store
+
+# 서비스가 쓰지 않는 원본·중간 데이터 (ASHRAE 참고용, 수백 MB)
+data/train.csv
+data/weather_train.csv
+data/building_metadata.csv
+output/cleaned_*
+output/datacenter_summary.json
+
+# Windows 실행 스크립트 (컨테이너에서는 docker-compose 가 대신한다)
+start.bat
+stop.bat

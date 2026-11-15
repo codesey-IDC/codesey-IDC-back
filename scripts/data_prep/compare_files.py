@@ -1,6 +1,7 @@
 import pandas as pd
 
-def compare_parquets():
+
+def compare_parquets() -> None:
     orig_path = 'data/synthetic_idc_90d.parquet'
     new_path = 'output/final/idc_train_refined_2026.parquet'
 
@@ -29,7 +30,7 @@ def compare_parquets():
 
     # 3. Data types
     dtypes_diff = False
-    for col in (orig_cols & new_cols):
+    for col in orig_cols & new_cols:
         if df_orig[col].dtype != df_new[col].dtype:
             print(f"Type mismatch in '{col}': {df_orig[col].dtype} -> {df_new[col].dtype}")
             dtypes_diff = True
@@ -38,7 +39,7 @@ def compare_parquets():
 
     # 4. Values (sample check)
     vals_diff = False
-    for col in (orig_cols & new_cols):
+    for col in orig_cols & new_cols:
         # Handle cases where values might be slightly different due to floating point or NaN
         if not df_orig[col].equals(df_new[col]):
             print(f"Value mismatch in '{col}'")
@@ -46,6 +47,7 @@ def compare_parquets():
             break
     if not vals_diff:
         print("Values: Identical content")
+
 
 if __name__ == "__main__":
     compare_parquets()

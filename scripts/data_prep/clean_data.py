@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 
-def reduce_mem_usage(df, verbose=True):
+
+def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     """메모리 사용량을 줄이기 위해 데이터 타입을 다운캐스팅하는 함수"""
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     start_mem = df.memory_usage().sum() / 1024**2
@@ -29,10 +30,14 @@ def reduce_mem_usage(df, verbose=True):
                     df[col] = df[col].astype(np.float64)
     end_mem = df.memory_usage().sum() / 1024**2
     if verbose:
-        print(f'메모리 최적화 완료: {start_mem:.2f} MB -> {end_mem:.2f} MB ({(1 - end_mem / start_mem) * 100:.1f}% 감소)')
+        print(
+            f'메모리 최적화 완료: {start_mem:.2f} MB -> {end_mem:.2f} MB '
+            f'({(1 - end_mem / start_mem) * 100:.1f}% 감소)'
+        )
     return df
 
-def clean_datacenter_pipeline(data_dir='./'):
+
+def clean_datacenter_pipeline(data_dir: str = './') -> None:
     print("1. 데이터 로드 중...")
     try:
         building_df = pd.read_csv(os.path.join(data_dir, 'building_metadata.csv'))
@@ -53,9 +58,15 @@ def clean_datacenter_pipeline(data_dir='./'):
 
     print("\n4. 날씨 데이터 결측치 선형 보간(Interpolation) 처리...")
     weather_df = weather_df.sort_values(['site_id', 'timestamp'])
-    weather_cols = ['air_temperature', 'cloud_coverage', 'dew_temperature', 
-                    'precip_depth_1_hr', 'sea_level_pressure', 'wind_speed']
-    
+    weather_cols = [
+        'air_temperature',
+        'cloud_coverage',
+        'dew_temperature',
+        'precip_depth_1_hr',
+        'sea_level_pressure',
+        'wind_speed',
+    ]
+
     for col in weather_cols:
         if col in weather_df.columns:
             weather_df[col] = weather_df.groupby('site_id')[col].transform(
@@ -73,7 +84,7 @@ def clean_datacenter_pipeline(data_dir='./'):
     # [핵심 추가] 열역학 모델 및 PUE/ESG 계산 로직 적용 (미션 요구사항 반영)
     print("\n7. 열역학 모델 및 PUE, 탄소 배출량 지표 계산 중...")
     # IT 전력 (kW) 가정 (meter_reading을 IT 부하로 매핑)
-    df['it_power_kw'] = df['meter_reading'] 
+    df['it_power_kw'] = df['meter_reading']
 
     # 칠러 COP 모델 (외기 온도 함수: 외기가 낮을수록 COP 상승, 최소 2.0 보장)
     df['cop'] = np.maximum(2.0, 6.0 - 0.1 * (df['air_temperature'] - 15))
@@ -91,25 +102,26 @@ def clean_datacenter_pipeline(data_dir='./'):
     # PUE 계산: (IT 전력 + 냉각 전력) / IT 전력
     df['total_power_kw'] = df['it_power_kw'] + df['chiller_power_kw']
     df['pue'] = df['total_power_kw'] / df['it_power_kw']
-    
+
     # ESG 탄소 배출량 계산 (계수: 0.459 tCO2/MWh = 0.000459 tCO2/kWh)
     df['carbon_emission_tco2'] = (df['total_power_kw'] / 1000) * 0.000459
 
     print("\n8. 정제된 결과물을 CSV 파일로 저장...")
     os.makedirs('./output', exist_ok=True)
-    
+
     # 전체 데이터 CSV 저장
     output_csv = './output/cleaned_datacenter_merged.csv'
     df.to_csv(output_csv, index=False)
-    
+
     # 깃허브 업로드용 샘플 파일 (상위 1만 행)
     sample_csv = './output/cleaned_datacenter_sample.csv'
     df.head(10000).to_csv(sample_csv, index=False)
-    
-    print(f"모든 정제 작업이 완료되었습니다!")
+
+    print("모든 정제 작업이 완료되었습니다!")
     print(f"- 전체 데이터 CSV: {output_csv}")
     print(f"- 깃 업로드용 샘플 CSV(상위 1만행): {sample_csv}")
     print(f"최종 데이터 크기(행, 열): {df.shape}")
+
 
 if __name__ == "__main__":
     data_path = './data'  # 본인의 CSV 파일들이 위치한 경로 지정

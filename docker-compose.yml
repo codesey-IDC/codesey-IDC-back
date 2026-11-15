@@ -1,0 +1,63 @@
+# IDC 냉각 최적화 시스템 전체 실행:  docker compose up --build
+#   대시보드  http://localhost:8501
+#   API 문서  http://localhost:8001/docs (트윈)  :8002/docs (예측)  :8003/docs (MPC)
+# 실행 순서: twin → forecast → mpc → dashboard (앞 서비스의 /health 가 응답한 뒤 시작)
+# 모듈 간 통신은 REST 만 쓰며, 주소는 환경변수로 컨테이너 이름을 가리킨다 (config/settings.yaml 보다 우선).
+
+x-app: &app
+  build: .
+  image: codesey-idc:latest
+  restart: unless-stopped
+  environment:
+    TWIN_URL: http://twin:8001
+    FORECAST_URL: http://forecast:8002
+    MPC_URL: http://mpc:8003
+
+x-healthcheck: &healthcheck
+  interval: 5s
+  timeout: 3s
+  retries: 20
+  start_period: 10s
+
+services:
+  twin:
+    <<: *app
+    command: ["uvicorn", "services.twin.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports: ["8001:8001"]
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+
+  forecast:
+    <<: *app
+    command: ["uvicorn", "services.forecast.main:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports: ["8002:8002"]
+    depends_on:
+      twin: {condition: service_healthy}         # 냉각 수요 예측(cooling_power)이 트윈을 부른다
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+
+  mpc:
+    <<: *app
+    command: ["uvicorn", "services.mpc.main:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports: ["8003:8003"]
+    depends_on:
+      twin: {condition: service_healthy}
+      forecast: {condition: service_healthy}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+
+  dashboard:
+    <<: *app
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.address", "0.0.0.0",
+              "--server.headless", "true"]
+    ports: ["8501:8501"]
+    depends_on:
+      twin: {condition: service_healthy}
+      forecast: {condition: service_healthy}
+      mpc: {condition: service_healthy}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]

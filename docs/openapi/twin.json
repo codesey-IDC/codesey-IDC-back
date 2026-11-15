@@ -1,0 +1,1383 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IDC Digital Twin Service",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/params": {
+      "get": {
+        "summary": "Params",
+        "operationId": "params_api_v1_params_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Params Api V1 Params Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulate": {
+      "post": {
+        "summary": "Simulate",
+        "operationId": "simulate_api_v1_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rollout": {
+      "post": {
+        "summary": "Rollout",
+        "operationId": "rollout_api_v1_rollout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolloutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolloutResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rollout/batch": {
+      "post": {
+        "summary": "Rollout Batch",
+        "operationId": "rollout_batch_api_v1_rollout_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolloutBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolloutBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tariff": {
+      "get": {
+        "summary": "Tariff Schedule",
+        "description": "[start, start + hours) 의 시간별 전기 단가. MPC 목적 함수와 비용 계산에 쓴다.",
+        "operationId": "tariff_schedule_api_v1_tariff_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "첫 시각 (그 1시간 구간의 시작)",
+              "title": "Start"
+            },
+            "description": "첫 시각 (그 1시간 구간의 시작)"
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 8784,
+              "minimum": 1,
+              "default": 24,
+              "title": "Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry": {
+      "get": {
+        "summary": "Telemetry",
+        "description": "[start, start + hours) 의 시간별 IT 부하·외기온도. 데이터 범위를 벗어난 부분은 빼고 돌려준다.",
+        "operationId": "telemetry_api_v1_telemetry_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "시작 시각. 생략 시 데이터 끝에서 hours 시간",
+              "title": "Start"
+            },
+            "description": "시작 시각. 생략 시 데이터 끝에서 hours 시간"
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2400,
+              "minimum": 1,
+              "default": 24,
+              "title": "Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/esg": {
+      "post": {
+        "summary": "Esg Summary",
+        "operationId": "esg_summary_api_v1_esg_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EsgRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EsgResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EsgRequest": {
+        "properties": {
+          "it_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 50000,
+            "minItems": 1,
+            "title": "It Power Kw"
+          },
+          "cooling_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 50000,
+            "minItems": 1,
+            "title": "Cooling Power Kw"
+          },
+          "cooling_mode": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50000,
+            "minItems": 1,
+            "title": "Cooling Mode",
+            "description": "'free_cooling' | 'hybrid' | 'chiller'"
+          },
+          "heat_removed_kw": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heat Removed Kw",
+            "description": "생략 시 IT 전력과 같다고 본다"
+          },
+          "price_krw_per_kwh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Krw Per Kwh",
+            "description": "구간별 전기 단가. 주면 전기요금도 계산"
+          },
+          "dt_hours": {
+            "type": "number",
+            "maximum": 24.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Dt Hours",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "it_power_kw",
+          "cooling_power_kw",
+          "cooling_mode"
+        ],
+        "title": "EsgRequest",
+        "description": "시뮬레이션 결과 시계열 → ESG 지표. 배열 길이는 모두 같아야 한다."
+      },
+      "EsgResponse": {
+        "properties": {
+          "it_energy_mwh": {
+            "type": "number",
+            "title": "It Energy Mwh"
+          },
+          "cooling_energy_mwh": {
+            "type": "number",
+            "title": "Cooling Energy Mwh"
+          },
+          "total_energy_mwh": {
+            "type": "number",
+            "title": "Total Energy Mwh"
+          },
+          "average_pue": {
+            "type": "number",
+            "title": "Average Pue"
+          },
+          "carbon_tco2": {
+            "type": "number",
+            "title": "Carbon Tco2"
+          },
+          "cue_tco2_per_mwh": {
+            "type": "number",
+            "title": "Cue Tco2 Per Mwh"
+          },
+          "water_usage_l": {
+            "type": "number",
+            "title": "Water Usage L"
+          },
+          "wue_l_per_kwh": {
+            "type": "number",
+            "title": "Wue L Per Kwh"
+          },
+          "water_by_mode_l": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Water By Mode L"
+          },
+          "cooling_energy_by_mode_mwh": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Cooling Energy By Mode Mwh"
+          },
+          "hours_by_mode": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Hours By Mode"
+          },
+          "carbon_factor_tco2_per_mwh": {
+            "type": "number",
+            "title": "Carbon Factor Tco2 Per Mwh"
+          },
+          "energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Cost Krw"
+          },
+          "cost_krw_per_mwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Krw Per Mwh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "it_energy_mwh",
+          "cooling_energy_mwh",
+          "total_energy_mwh",
+          "average_pue",
+          "carbon_tco2",
+          "cue_tco2_per_mwh",
+          "water_usage_l",
+          "wue_l_per_kwh",
+          "water_by_mode_l",
+          "cooling_energy_by_mode_mwh",
+          "hours_by_mode",
+          "carbon_factor_tco2_per_mwh"
+        ],
+        "title": "EsgResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "RolloutBatchRequest": {
+        "properties": {
+          "it_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2016,
+            "minItems": 1,
+            "title": "It Power Kw"
+          },
+          "outdoor_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2016,
+            "minItems": 1,
+            "title": "Outdoor Temp C"
+          },
+          "plans": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 1024,
+            "minItems": 1,
+            "title": "Plans",
+            "description": "계획별 구간 설정 온도"
+          },
+          "initial_room_temp_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Initial Room Temp C"
+          },
+          "dt_hours": {
+            "type": "number",
+            "maximum": 24.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Dt Hours",
+            "default": 1.0
+          },
+          "capacity_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Capacity Factor",
+            "default": 1.0
+          },
+          "price_krw_per_kwh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Krw Per Kwh",
+            "description": "구간별 전기 단가. 주면 요금 합계도 계산"
+          },
+          "tes_plans": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tes Plans",
+            "description": "계획별 축열조 출력 (plans 와 같은 개수·길이)"
+          },
+          "initial_tes_kwh": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Tes Kwh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "it_power_kw",
+          "outdoor_temp_c",
+          "plans",
+          "initial_room_temp_c"
+        ],
+        "title": "RolloutBatchRequest",
+        "description": "설정 온도 계획 여러 개를 한 번에 평가 (MPC 후보 비교용)."
+      },
+      "RolloutBatchResponse": {
+        "properties": {
+          "total_energy_cost_krw": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Energy Cost Krw"
+          },
+          "total_it_energy_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Total It Energy Kwh"
+          },
+          "total_fan_extra_energy_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Total Fan Extra Energy Kwh"
+          },
+          "total_cooling_energy_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Total Cooling Energy Kwh"
+          },
+          "total_facility_energy_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Total Facility Energy Kwh"
+          },
+          "average_pue": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Average Pue"
+          },
+          "max_room_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Max Room Temp C"
+          },
+          "min_room_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Min Room Temp C"
+          },
+          "min_ride_through_min": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Min Ride Through Min"
+          },
+          "average_xfactor": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Average Xfactor"
+          },
+          "violation_steps": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Violation Steps"
+          },
+          "capacity_limited_steps": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Capacity Limited Steps"
+          },
+          "final_tes_soc_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Final Tes Soc Kwh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_it_energy_kwh",
+          "total_fan_extra_energy_kwh",
+          "total_cooling_energy_kwh",
+          "total_facility_energy_kwh",
+          "average_pue",
+          "max_room_temp_c",
+          "min_room_temp_c",
+          "min_ride_through_min",
+          "average_xfactor",
+          "violation_steps",
+          "capacity_limited_steps",
+          "final_tes_soc_kwh"
+        ],
+        "title": "RolloutBatchResponse",
+        "description": "계획별 합계·지표 (plans 순서대로)."
+      },
+      "RolloutRequest": {
+        "properties": {
+          "it_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2016,
+            "minItems": 1,
+            "title": "It Power Kw",
+            "description": "구간별 IT 부하 (예측값)"
+          },
+          "outdoor_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2016,
+            "minItems": 1,
+            "title": "Outdoor Temp C"
+          },
+          "supply_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2016,
+            "minItems": 1,
+            "title": "Supply Temp C",
+            "description": "구간별 공급 공기 설정 온도 계획"
+          },
+          "initial_room_temp_c": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Room Temp C",
+            "description": "생략 시 첫 설정 온도에서 시작"
+          },
+          "dt_hours": {
+            "type": "number",
+            "maximum": 24.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Dt Hours",
+            "description": "구간 길이(시간)",
+            "default": 1.0
+          },
+          "capacity_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Capacity Factor",
+            "description": "냉각 용량 배율 (0.5 = 칠러 일부 고장)",
+            "default": 1.0
+          },
+          "price_krw_per_kwh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Krw Per Kwh",
+            "description": "구간별 전기 단가 (GET /api/v1/tariff). 주면 전기요금도 계산"
+          },
+          "tes_kw": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tes Kw",
+            "description": "구간별 축열조 출력 명령 (+충전 / -방전, 냉열 kW). 생략하면 축열조를 쓰지 않는다"
+          },
+          "initial_tes_kwh": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Tes Kwh",
+            "description": "시작 저장량. 생략 시 용량 × tes_initial_soc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "it_power_kw",
+          "outdoor_temp_c",
+          "supply_temp_c"
+        ],
+        "title": "RolloutRequest",
+        "description": "설정 온도 계획 평가 (MPC 용). 세 배열은 길이가 같아야 한다."
+      },
+      "RolloutResponse": {
+        "properties": {
+          "room_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Room Temp C"
+          },
+          "return_air_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Return Air Temp C"
+          },
+          "it_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "It Power Kw"
+          },
+          "server_fan_extra_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Server Fan Extra Kw"
+          },
+          "heat_removed_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Heat Removed Kw"
+          },
+          "cooling_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Cooling Power Kw"
+          },
+          "facility_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Facility Power Kw"
+          },
+          "pue": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pue"
+          },
+          "free_cooling_fraction": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Free Cooling Fraction"
+          },
+          "cooling_mode": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cooling Mode"
+          },
+          "ride_through_min": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Ride Through Min"
+          },
+          "tes_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Tes Kw"
+          },
+          "tes_soc_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Tes Soc Kwh"
+          },
+          "energy_cost_krw": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Cost Krw"
+          },
+          "total_energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Energy Cost Krw"
+          },
+          "total_it_energy_kwh": {
+            "type": "number",
+            "title": "Total It Energy Kwh"
+          },
+          "total_fan_extra_energy_kwh": {
+            "type": "number",
+            "title": "Total Fan Extra Energy Kwh"
+          },
+          "total_cooling_energy_kwh": {
+            "type": "number",
+            "title": "Total Cooling Energy Kwh"
+          },
+          "total_facility_energy_kwh": {
+            "type": "number",
+            "title": "Total Facility Energy Kwh"
+          },
+          "average_pue": {
+            "type": "number",
+            "title": "Average Pue"
+          },
+          "max_room_temp_c": {
+            "type": "number",
+            "title": "Max Room Temp C"
+          },
+          "min_room_temp_c": {
+            "type": "number",
+            "title": "Min Room Temp C"
+          },
+          "min_ride_through_min": {
+            "type": "number",
+            "title": "Min Ride Through Min"
+          },
+          "average_xfactor": {
+            "type": "number",
+            "title": "Average Xfactor"
+          },
+          "violation_steps": {
+            "type": "integer",
+            "title": "Violation Steps"
+          },
+          "capacity_limited_steps": {
+            "type": "integer",
+            "title": "Capacity Limited Steps"
+          },
+          "final_tes_soc_kwh": {
+            "type": "number",
+            "title": "Final Tes Soc Kwh"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "room_temp_c",
+          "return_air_temp_c",
+          "it_power_kw",
+          "server_fan_extra_kw",
+          "heat_removed_kw",
+          "cooling_power_kw",
+          "facility_power_kw",
+          "pue",
+          "free_cooling_fraction",
+          "cooling_mode",
+          "ride_through_min",
+          "tes_kw",
+          "tes_soc_kwh",
+          "total_it_energy_kwh",
+          "total_fan_extra_energy_kwh",
+          "total_cooling_energy_kwh",
+          "total_facility_energy_kwh",
+          "average_pue",
+          "max_room_temp_c",
+          "min_room_temp_c",
+          "min_ride_through_min",
+          "average_xfactor",
+          "violation_steps",
+          "capacity_limited_steps",
+          "final_tes_soc_kwh"
+        ],
+        "title": "RolloutResponse"
+      },
+      "SimulatePoint": {
+        "properties": {
+          "outdoor_temp_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": -40.0,
+            "title": "Outdoor Temp C"
+          },
+          "it_power_kw": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Power Kw"
+          },
+          "cpu_utilization": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Utilization"
+          },
+          "supply_temp_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply Temp C",
+            "description": "생략 시 기준 설정 온도 (원본 데이터와 같음)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outdoor_temp_c"
+        ],
+        "title": "SimulatePoint",
+        "description": "한 시점 조건. it_power_kw 와 cpu_utilization 중 하나는 있어야 한다."
+      },
+      "SimulateRequest": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/SimulatePoint"
+            },
+            "type": "array",
+            "maxItems": 50000,
+            "minItems": 1,
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "points"
+        ],
+        "title": "SimulateRequest"
+      },
+      "SimulateResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SimulateResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "kW"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "SimulateResponse",
+        "description": "정상 상태 계산 결과 (제거열 = 발열)."
+      },
+      "SimulateResult": {
+        "properties": {
+          "it_power_kw": {
+            "type": "number",
+            "title": "It Power Kw"
+          },
+          "server_fan_extra_kw": {
+            "type": "number",
+            "title": "Server Fan Extra Kw"
+          },
+          "server_heat_kw": {
+            "type": "number",
+            "title": "Server Heat Kw"
+          },
+          "air_mass_flow_kg_s": {
+            "type": "number",
+            "title": "Air Mass Flow Kg S"
+          },
+          "return_air_temp_c": {
+            "type": "number",
+            "title": "Return Air Temp C"
+          },
+          "cooling_load_kw": {
+            "type": "number",
+            "title": "Cooling Load Kw"
+          },
+          "free_cooling_fraction": {
+            "type": "number",
+            "title": "Free Cooling Fraction"
+          },
+          "chiller_cop": {
+            "type": "number",
+            "title": "Chiller Cop"
+          },
+          "cooling_mode": {
+            "type": "string",
+            "title": "Cooling Mode"
+          },
+          "cooling_power_kw": {
+            "type": "number",
+            "title": "Cooling Power Kw"
+          },
+          "facility_power_kw": {
+            "type": "number",
+            "title": "Facility Power Kw"
+          },
+          "pue": {
+            "type": "number",
+            "title": "Pue"
+          },
+          "ride_through_min": {
+            "type": "number",
+            "title": "Ride Through Min"
+          },
+          "xfactor": {
+            "type": "number",
+            "title": "Xfactor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "it_power_kw",
+          "server_fan_extra_kw",
+          "server_heat_kw",
+          "air_mass_flow_kg_s",
+          "return_air_temp_c",
+          "cooling_load_kw",
+          "free_cooling_fraction",
+          "chiller_cop",
+          "cooling_mode",
+          "cooling_power_kw",
+          "facility_power_kw",
+          "pue",
+          "ride_through_min",
+          "xfactor"
+        ],
+        "title": "SimulateResult"
+      },
+      "TariffResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "effective_date": {
+            "type": "string",
+            "title": "Effective Date"
+          },
+          "timestamps": {
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "season": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Season"
+          },
+          "period": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Period"
+          },
+          "price_krw_per_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Price Krw Per Kwh"
+          },
+          "basic_charge_krw_per_kw": {
+            "type": "number",
+            "title": "Basic Charge Krw Per Kw"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "source",
+          "effective_date",
+          "timestamps",
+          "season",
+          "period",
+          "price_krw_per_kwh",
+          "basic_charge_krw_per_kw"
+        ],
+        "title": "TariffResponse",
+        "description": "시간대별 전기 단가 (한전 일반용전력(을) 고압A 선택Ⅲ). 시각은 그 1시간 구간의 시작."
+      },
+      "TelemetryResponse": {
+        "properties": {
+          "timestamps": {
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "it_power_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "It Power Kw"
+          },
+          "outdoor_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Outdoor Temp C"
+          },
+          "data_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Data Start"
+          },
+          "data_end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Data End"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "kW"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamps",
+          "it_power_kw",
+          "outdoor_temp_c",
+          "data_start",
+          "data_end"
+        ],
+        "title": "TelemetryResponse",
+        "description": "가상 데이터센터의 시간별 계측값 (1시간 평균). 대시보드·MPC 시뮬레이션의 입력."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

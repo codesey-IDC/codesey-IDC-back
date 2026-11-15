@@ -2,8 +2,11 @@
  IT 부하 예측 모델 1차 학습 정리
 ==============================================================
 
-이 문서는 train_forecast.py 로 학습한 결과물을 받는 사람
+이 문서는 scripts/train_forecast.py 로 학습한 결과물을 받는 사람
 (예측 함수 / 시각화 담당)이 바로 이어서 작업할 수 있도록 정리한 것.
+
+※ 현재 서비스 기본 모델은 Ridge 선형 회귀다 (12번). 이 문서의 1~11번은 LightGBM 모델 기록이며,
+  LightGBM 도 서비스에서 계속 쓸 수 있다 (요청 "model": "lgbm" 또는 config/settings.yaml forecast.model).
 
 
 --------------------------------------------------------------
@@ -22,7 +25,7 @@ IT 부하 예측값 = 냉각 부하 예측값 이다. (별도 모델 없음)
 2. 실행 방법
 --------------------------------------------------------------
   pip install -r requirements.txt
-  python train_forecast.py          # 약 30초, CPU만 사용
+  python scripts/train_forecast.py          # 약 30초, CPU만 사용
 
 결과는 전부 output/forecast/ 에 저장된다.
 
@@ -163,7 +166,7 @@ output/forecast/
 8. 예측 함수 만들 때 할 일 (다음 담당자)
 --------------------------------------------------------------
   1) 피처 계산 코드를 하나로 공유
-     train_forecast.py 의 build_direct_dataset 와 예측 함수가
+     scripts/train_forecast.py 의 build_direct_dataset 와 예측 함수가
      같은 피처 계산 함수를 쓰게 해야 한다. 따로 만들면 나중에
      한쪽만 바뀌어도 에러 없이 틀린 예측이 나온다.
   2) CQR offset 을 모델 옆에 설정 파일로 저장
@@ -197,20 +200,20 @@ output/forecast/
 10. 2차: 예측 함수 / API / 시각화 (임태형)
 --------------------------------------------------------------
 [파일]
-  services/forecast/features.py   피처 계산 (학습·서빙 공용). train_forecast.py 도 이걸 import 한다.
+  services/forecast/features.py   피처 계산 (학습·서빙 공용). scripts/train_forecast.py 도 이걸 import 한다.
   services/forecast/predictor.py  Predictor: model_config.json + 모델 6개 로드, forecast(history, horizon)
   services/forecast/schemas.py    요청/응답 Pydantic 스키마
   services/forecast/main.py       FastAPI (:8002)  GET /health, POST /api/v1/forecast
   output/forecast/models/model_config.json
-                                  CQR offset, 피처 순서, 학습 범위, 모델 파일명 (train_forecast.py 가 생성)
-  visualize_forecast.py           output/forecast/plots/forecast_report.html (plotly, 그래프 3개 + 지표표)
+                                  CQR offset, 피처 순서, 학습 범위, 모델 파일명 (scripts/train_forecast.py 가 생성)
+  scripts/visualize_forecast.py           output/forecast/plots/forecast_report.html (plotly, 그래프 3개 + 지표표)
   tests/                          pytest 22개 (피처 누수, 서빙=학습 재현, 안전장치, API)
 
 [실행]
   pip install -r requirements.txt
-  python train_forecast.py --config-only     # 모델은 그대로 두고 model_config.json 만 생성
+  python scripts/train_forecast.py --config-only     # 모델은 그대로 두고 model_config.json 만 생성
   uvicorn services.forecast.main:app --port 8002   → http://localhost:8002/docs
-  python visualize_forecast.py
+  python scripts/visualize_forecast.py
   python -m pytest -q
 
 [API]
@@ -242,18 +245,18 @@ output/forecast/
 11. 하이퍼파라미터 튜닝 (Optuna)
 --------------------------------------------------------------
 [파일]
-  tune_forecast.py                 튜닝 스크립트 (train_forecast.py 의 데이터·피처·분할 함수 재사용)
+  scripts/tune_forecast.py                 튜닝 스크립트 (scripts/train_forecast.py 의 데이터·피처·분할 함수 재사용)
   output/forecast/tuning/
     best_params.json               모델별 최적 조합 (Val 기준)
     comparison.json                기존 고정값 vs 튜닝값 최종 지표
     trials_24h.csv / trials_168h.csv   시도별 파라미터와 Val MAPE 전체 기록
 
 [실행]
-  python tune_forecast.py                  # 24h, 168h 각 30회 (약 2~3분, CPU)
-  python tune_forecast.py --trials 50
-  python tune_forecast.py --horizon 24h    # 한 모델만
+  python scripts/tune_forecast.py                  # 24h, 168h 각 30회 (약 2~3분, CPU)
+  python scripts/tune_forecast.py --trials 50
+  python scripts/tune_forecast.py --horizon 24h    # 한 모델만
   ※ 운영 모델(output/forecast/models/)은 덮어쓰지 않는다.
-    채택하려면 best_params.json 값을 train_forecast.py 의 LGB_PARAMS 에 옮기고 다시 학습.
+    채택하려면 best_params.json 값을 scripts/train_forecast.py 의 LGB_PARAMS 에 옮기고 다시 학습.
 
 [방법]
   1) q50 모델만 Train 으로 학습, Val MAPE 로 조합 비교 (Test 는 선택에 사용 안 함)
@@ -278,3 +281,32 @@ output/forecast/
     하이퍼파라미터보다 데이터 구조가 성능을 결정한다.
   - 발표용 한 줄: "Optuna 50회 튜닝 결과 Test MAPE 가 개선되지 않아(0.885→0.902%)
     기존 설정을 유지함"
+
+
+--------------------------------------------------------------
+12. 예측 모델 비교와 서비스 모델 변경 (Ridge)
+--------------------------------------------------------------
+[파일]
+  scripts/compare_forecast_models.py       LightGBM / Ridge / 1주 전 값, 같은 데이터·피처·분할로 비교
+  services/forecast/ridge.py       Ridge 모델 정의 (학습·비교·서빙 공용)
+  scripts/train_ridge.py                   Ridge 학습·저장 → models/ridge_24h.joblib, ridge_168h.joblib, ridge_config.json
+  output/forecast/model_comparison.json
+
+[방법]
+  Ridge: 피처는 LightGBM 과 같다. 시각·요일은 one-hot, 나머지는 표준화.
+         90% 구간 = 예측 ± Val 절대 오차의 90% 분위수 (split conformal, 유한 표본 보정)
+  선정은 Val MAPE(24h + 168h) 로 한다. Test 는 선정과 무관하게 마지막에 한 번 보고만 한다.
+
+[결과]
+                       Val 24h   Val 168h |  Test 24h   Test 168h   적중률 24h / 168h
+  lightgbm             0.983%    0.942%   |  0.885%     0.881%      92.3% / 91.1%
+  ridge                0.884%    0.879%   |  0.860%     0.835%      90.4% / 91.2%
+  1주 전 값 (기준선)    1.348%    1.335%   |  1.240%     1.210%      92.2% / 93.0%
+
+  → Val 기준 Ridge 선정. 데이터가 "1주 프로필 반복 + 노이즈"라 선형 모델로 충분하다.
+    서비스 기본 모델을 Ridge 로 바꿨다 (config/settings.yaml forecast.model: ridge).
+    LightGBM 경로는 그대로 남아 있고 요청에서 "model": "lgbm" 으로 쓸 수 있다.
+
+[실행]
+  python scripts/train_ridge.py                  # 약 3초. Docker 이미지에서는 빌드할 때 다시 학습한다
+  python scripts/compare_forecast_models.py

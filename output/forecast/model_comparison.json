@@ -1,0 +1,57 @@
+{
+    "criteria": {
+        "mape_24h_max": 5.0,
+        "mape_168h_max": 8.0,
+        "coverage_min": 85.0
+    },
+    "selection": "Val MAPE (24h + 168h) 최소",
+    "models": {
+        "lightgbm": {
+            "24h": {
+                "mape": 0.8849174458448911,
+                "coverage_pct": 92.284904688305,
+                "width_kw": 126.91251784473071,
+                "val_mape": 0.9834290806579231
+            },
+            "168h": {
+                "mape": 0.8812697921077356,
+                "coverage_pct": 91.0702451954937,
+                "width_kw": 119.4960075858663,
+                "val_mape": 0.9417136703421758
+            }
+        },
+        "ridge": {
+            "24h": {
+                "mape": 0.8598109092239523,
+                "coverage_pct": 90.41731066460588,
+                "width_kw": 104.59605766035746,
+                "conformal_halfwidth_kw": 52.29802883017874,
+                "val_mape": 0.8839536661485157
+            },
+            "168h": {
+                "mape": 0.8353856344383875,
+                "coverage_pct": 91.24775158572376,
+                "width_kw": 103.57404229068105,
+                "conformal_halfwidth_kw": 51.78702114534053,
+                "val_mape": 0.8786096942784853
+            }
+        },
+        "seasonal_naive": {
+            "24h": {
+                "mape": 1.2402591967732144,
+                "coverage_pct": 92.16898505924782,
+                "width_kw": 166.326494466789,
+                "conformal_halfwidth_kw": 83.16324723339449,
+                "val_mape": 1.3482224724857854
+            },
+            "168h": {
+                "mape": 1.2097314127010972,
+                "coverage_pct": 93.03938275111237,
+                "width_kw": 166.37375077224533,
+                "conformal_halfwidth_kw": 83.18687538612267,
+                "val_mape": 1.334912658660784
+            }
+        }
+    },
+    "selected": "ridge"
+}

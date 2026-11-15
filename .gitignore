@@ -4,7 +4,10 @@
 /output/*
 !/output/forecast/
 !/output/mpc/
+!/output/benchmark/
 
 # python
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.coverage

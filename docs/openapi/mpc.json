@@ -1,0 +1,1263 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IDC MPC Service",
+    "version": "0.4.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/optimize": {
+      "post": {
+        "summary": "Control Optimize",
+        "description": "현재 상태 → 시간대별 최적 냉각 설정값(공급 온도·축열조 출력)과 예상 PUE. 첫 시간 값만 적용하고 매시간 다시 부른다.",
+        "operationId": "control_optimize_api_v1_control_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlSchedule"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/control/mpc": {
+      "post": {
+        "summary": "Control Mpc",
+        "description": "현재 상태 → MPC 제어 결과 전체 (지금 적용할 값, 24시간 계획, 예측 부하, 단가, 예상 상태, 계산 시간).",
+        "operationId": "control_mpc_api_v1_control_mpc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plan": {
+      "post": {
+        "summary": "Plan",
+        "operationId": "plan_api_v1_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulate": {
+      "post": {
+        "summary": "Simulate",
+        "description": "매시간 설정 온도 결정 → 트윈 1시간 진행을 hours 번 반복하고 끝날 때까지 기다린다.\n\nMPC 는 1시간당 약 0.4초라 오래 걸린다. 같은 요청의 작업이 이미 끝났으면 그 결과를 바로 돌려준다.",
+        "operationId": "simulate_api_v1_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulate/jobs": {
+      "post": {
+        "summary": "Submit Simulation",
+        "description": "시뮬레이션을 백그라운드 작업으로 등록하고 바로 응답한다. 같은 요청이면 기존 작업(결과)을 돌려준다.",
+        "operationId": "submit_simulation_api_v1_simulate_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulate/jobs/{job_id}": {
+      "get": {
+        "summary": "Simulation Status",
+        "description": "작업 상태: queued → running (progress_hours / total_hours) → done (result) | failed (error).",
+        "operationId": "simulation_status_api_v1_simulate_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios": {
+      "get": {
+        "summary": "Scenarios",
+        "operationId": "scenarios_api_v1_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScenarioInfo"
+                  },
+                  "type": "array",
+                  "title": "Response Scenarios Api V1 Scenarios Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/results": {
+      "get": {
+        "summary": "Results",
+        "operationId": "results_api_v1_results_get",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$",
+              "description": "'base'(Test 14일) | 'surge'(서버 급증 3일)",
+              "default": "base",
+              "title": "Scenario"
+            },
+            "description": "'base'(Test 14일) | 'surge'(서버 급증 3일)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ControlRequest": {
+        "properties": {
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp",
+            "description": "현재 시각 (계획 시작). history 나 외기 예보를 생략하면 필요"
+          },
+          "room_temp_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Room Temp C",
+            "description": "현재 서버실(서버 흡기) 온도"
+          },
+          "current_setpoint_c": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Setpoint C",
+            "description": "지금 적용 중인 공급 공기 설정 온도 (변화율 제약 기준)"
+          },
+          "tes_soc_kwh": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tes Soc Kwh",
+            "description": "현재 축열조 저장량 (kWh). 생략 시 시작 저장량"
+          },
+          "capacity_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Capacity Factor",
+            "description": "냉각 용량 배율 (0.75 = 칠러 4대 중 1대 고장)",
+            "default": 1.0
+          },
+          "history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HistoryPoint"
+                },
+                "type": "array",
+                "minItems": 168
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History",
+            "description": "최근 IT 부하 (1시간 또는 5분, 최소 168시간)"
+          },
+          "outdoor_forecast_c": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 24,
+                "minItems": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outdoor Forecast C",
+            "description": "앞으로 24시간 외기온도 예보"
+          }
+        },
+        "type": "object",
+        "required": [
+          "room_temp_c"
+        ],
+        "title": "ControlRequest",
+        "description": "현재 상태를 받아 최적 냉각 제어 계획을 만든다 (POST /api/v1/control/optimize, /control/mpc).\n\nhistory·outdoor_forecast_c 를 생략하면 MPC 서비스가 twin-service /api/v1/telemetry 에서\ntimestamp 이전 192시간 IT 부하와 이후 24시간 외기온도를 받아 쓴다 (외기는 실측을 예보로 가정)."
+      },
+      "ControlSchedule": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "default": "mpc"
+          },
+          "objective": {
+            "type": "string",
+            "title": "Objective",
+            "default": "cost"
+          },
+          "timestamps": {
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "supply_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Supply Temp C"
+          },
+          "tes_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Tes Kw"
+          },
+          "cooling_mode": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cooling Mode"
+          },
+          "expected_pue": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Expected Pue"
+          },
+          "expected_room_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Expected Room Temp C"
+          },
+          "expected_tes_soc_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Expected Tes Soc Kwh"
+          },
+          "price_krw_per_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Price Krw Per Kwh"
+          },
+          "expected_energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Energy Cost Krw"
+          },
+          "baseline_energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Energy Cost Krw"
+          },
+          "expected_cost_saving_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Cost Saving Pct"
+          },
+          "expected_average_pue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Average Pue"
+          },
+          "computation_time_s": {
+            "type": "number",
+            "title": "Computation Time S"
+          },
+          "inputs_from": {
+            "type": "string",
+            "title": "Inputs From"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "timestamps",
+          "supply_temp_c",
+          "tes_kw",
+          "cooling_mode",
+          "expected_pue",
+          "expected_room_temp_c",
+          "expected_tes_soc_kwh",
+          "price_krw_per_kwh",
+          "computation_time_s",
+          "inputs_from"
+        ],
+        "title": "ControlSchedule",
+        "description": "시간대별 최적 냉각 설정값과 예상 상태 (POST /api/v1/control/optimize)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HistoryPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "it_power_kw": {
+            "type": "number",
+            "title": "It Power Kw"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "it_power_kw"
+        ],
+        "title": "HistoryPoint"
+      },
+      "PlanRequest": {
+        "properties": {
+          "room_temp_c": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Room Temp C",
+            "description": "현재 서버실 온도"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryPoint"
+            },
+            "type": "array",
+            "minItems": 168,
+            "title": "History",
+            "description": "최근 IT 부하 (1시간 또는 5분, 최소 168시간)"
+          },
+          "outdoor_forecast_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Outdoor Forecast C",
+            "description": "앞으로 24시간 외기온도 예보"
+          },
+          "capacity_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Capacity Factor",
+            "description": "냉각 용량 배율 (0.5 = 칠러 일부 고장)",
+            "default": 1.0
+          },
+          "tes_soc_kwh": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tes Soc Kwh",
+            "description": "현재 축열조 저장량. 생략 시 시작 저장량"
+          },
+          "current_setpoint_c": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Setpoint C",
+            "description": "지금 적용 중인 설정 온도 (시간당 변화율 제약 기준)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "room_temp_c",
+          "history",
+          "outdoor_forecast_c"
+        ],
+        "title": "PlanRequest",
+        "description": "지금 상태 + 최근 이력 + 외기 예보를 받아 설정 온도를 정한다."
+      },
+      "PlanResponse": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "setpoint_c": {
+            "type": "number",
+            "title": "Setpoint C"
+          },
+          "plan_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Plan C"
+          },
+          "tes_kw": {
+            "type": "number",
+            "title": "Tes Kw",
+            "default": 0.0
+          },
+          "tes_plan_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Tes Plan Kw"
+          },
+          "predicted_tes_soc_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predicted Tes Soc Kwh"
+          },
+          "objective": {
+            "type": "string",
+            "title": "Objective",
+            "default": "cost"
+          },
+          "timestamps": {
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "forecast_it_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Forecast It Kw"
+          },
+          "price_krw_per_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Price Krw Per Kwh"
+          },
+          "predicted_room_temp_c": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predicted Room Temp C"
+          },
+          "predicted_facility_kw": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predicted Facility Kw"
+          },
+          "predicted_pue": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predicted Pue"
+          },
+          "predicted_cooling_mode": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Predicted Cooling Mode"
+          },
+          "expected_facility_energy_kwh": {
+            "type": "number",
+            "title": "Expected Facility Energy Kwh",
+            "default": 0.0
+          },
+          "baseline_facility_energy_kwh": {
+            "type": "number",
+            "title": "Baseline Facility Energy Kwh",
+            "default": 0.0
+          },
+          "expected_saving_pct": {
+            "type": "number",
+            "title": "Expected Saving Pct",
+            "default": 0.0
+          },
+          "expected_energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Energy Cost Krw"
+          },
+          "baseline_energy_cost_krw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Energy Cost Krw"
+          },
+          "expected_cost_saving_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Cost Saving Pct"
+          },
+          "computation_time_s": {
+            "type": "number",
+            "title": "Computation Time S",
+            "default": 0.0
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "setpoint_c",
+          "plan_c"
+        ],
+        "title": "PlanResponse"
+      },
+      "ResultsResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "hours": {
+            "type": "integer",
+            "title": "Hours"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "controllers": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Controllers"
+          },
+          "timeseries": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {},
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Timeseries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "hours",
+          "scenario",
+          "controllers",
+          "timeseries"
+        ],
+        "title": "ResultsResponse",
+        "description": "scripts/simulate_mpc.py 로 미리 계산해 둔 장기 비교 실험 (output/mpc/)."
+      },
+      "ScenarioInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "it_scale": {
+            "type": "number",
+            "title": "It Scale"
+          },
+          "outdoor_min_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outdoor Min C"
+          },
+          "capacity_factor": {
+            "type": "number",
+            "title": "Capacity Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "strategy",
+          "it_scale",
+          "outdoor_min_c",
+          "capacity_factor"
+        ],
+        "title": "ScenarioInfo"
+      },
+      "SimulateRequest": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start",
+            "description": "시작 시각. 이전 192시간의 계측 이력이 있어야 한다"
+          },
+          "hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "default": 24
+          },
+          "controller": {
+            "type": "string",
+            "enum": [
+              "fixed_20",
+              "rule_pid",
+              "rule_tes",
+              "reactive",
+              "mpc"
+            ],
+            "title": "Controller",
+            "default": "mpc"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario",
+            "description": "GET /api/v1/scenarios 의 name (config/settings.yaml 의 scenarios)",
+            "default": "normal"
+          },
+          "initial_room_temp_c": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Room Temp C",
+            "description": "시작 서버실 온도. 생략 시 기준 설정 온도(20℃)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start"
+        ],
+        "title": "SimulateRequest",
+        "description": "폐루프 시뮬레이션: start 부터 hours 시간을 1시간씩 진행한다."
+      },
+      "SimulateResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "hours": {
+            "type": "integer",
+            "title": "Hours"
+          },
+          "controller": {
+            "type": "string",
+            "title": "Controller"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "scenario_label": {
+            "type": "string",
+            "title": "Scenario Label"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SimulateSummary"
+          },
+          "timeseries": {
+            "additionalProperties": {
+              "items": {},
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Timeseries"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "hours",
+          "controller",
+          "scenario",
+          "scenario_label",
+          "strategy",
+          "summary",
+          "timeseries"
+        ],
+        "title": "SimulateResponse"
+      },
+      "SimulateSummary": {
+        "properties": {
+          "hours": {
+            "type": "integer",
+            "title": "Hours"
+          },
+          "energy_cost_krw": {
+            "type": "number",
+            "title": "Energy Cost Krw"
+          },
+          "facility_energy_kwh": {
+            "type": "number",
+            "title": "Facility Energy Kwh"
+          },
+          "cooling_energy_kwh": {
+            "type": "number",
+            "title": "Cooling Energy Kwh"
+          },
+          "fan_extra_energy_kwh": {
+            "type": "number",
+            "title": "Fan Extra Energy Kwh"
+          },
+          "it_energy_kwh": {
+            "type": "number",
+            "title": "It Energy Kwh"
+          },
+          "average_pue": {
+            "type": "number",
+            "title": "Average Pue"
+          },
+          "average_xfactor": {
+            "type": "number",
+            "title": "Average Xfactor"
+          },
+          "average_setpoint_c": {
+            "type": "number",
+            "title": "Average Setpoint C"
+          },
+          "max_room_temp_c": {
+            "type": "number",
+            "title": "Max Room Temp C"
+          },
+          "min_room_temp_c": {
+            "type": "number",
+            "title": "Min Room Temp C"
+          },
+          "temp_maintenance_pct": {
+            "type": "number",
+            "title": "Temp Maintenance Pct"
+          },
+          "temp_ok": {
+            "type": "boolean",
+            "title": "Temp Ok"
+          },
+          "min_ride_through_min": {
+            "type": "number",
+            "title": "Min Ride Through Min"
+          },
+          "violation_hours": {
+            "type": "integer",
+            "title": "Violation Hours"
+          },
+          "capacity_limited_hours": {
+            "type": "integer",
+            "title": "Capacity Limited Hours"
+          },
+          "mode_hours": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Mode Hours"
+          },
+          "final_tes_soc_kwh": {
+            "type": "number",
+            "title": "Final Tes Soc Kwh"
+          },
+          "diverged": {
+            "type": "boolean",
+            "title": "Diverged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hours",
+          "energy_cost_krw",
+          "facility_energy_kwh",
+          "cooling_energy_kwh",
+          "fan_extra_energy_kwh",
+          "it_energy_kwh",
+          "average_pue",
+          "average_xfactor",
+          "average_setpoint_c",
+          "max_room_temp_c",
+          "min_room_temp_c",
+          "temp_maintenance_pct",
+          "temp_ok",
+          "min_ride_through_min",
+          "violation_hours",
+          "capacity_limited_hours",
+          "mode_hours",
+          "final_tes_soc_kwh",
+          "diverged"
+        ],
+        "title": "SimulateSummary"
+      },
+      "SimulationJob": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "progress_hours": {
+            "type": "integer",
+            "title": "Progress Hours"
+          },
+          "total_hours": {
+            "type": "integer",
+            "title": "Total Hours"
+          },
+          "elapsed_s": {
+            "type": "number",
+            "title": "Elapsed S"
+          },
+          "request": {
+            "$ref": "#/components/schemas/SimulateRequest"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimulateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "progress_hours",
+          "total_hours",
+          "elapsed_s",
+          "request"
+        ],
+        "title": "SimulationJob",
+        "description": "백그라운드 시뮬레이션 작업 (POST /api/v1/simulate/jobs, GET /api/v1/simulate/jobs/{job_id})."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
