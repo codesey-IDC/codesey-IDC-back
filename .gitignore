@@ -5,6 +5,7 @@
 !/output/forecast/
 !/output/mpc/
 !/output/benchmark/
+!/output/validation/
 
 # python
 __pycache__/

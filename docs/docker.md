@@ -49,7 +49,26 @@ docker compose exec mpc python scripts/benchmark_api.py    # 엔드포인트별 
 
 브라우저에서 http://localhost:8501 → 서비스 상태가 모두 연결됨, 관제 탭에 PUE 게이지·전력 추이·서버실 온도·냉각 모드가 보이면 성공.
 
-## 4. 문제 해결
+## 4. Sinergym 비교 검증 (선택)
+
+열역학 모델을 Sinergym(EnergyPlus)과 비교한다. Sinergym 설치가 무거워 공식 이미지를 그대로 쓴다.
+
+```bash
+docker compose --profile validation run --rm sinergym-validate     # 약 2분 (이미지가 이미 있을 때)
+docker compose --profile validation rm -f sinergym-collect         # 끝난 수집 컨테이너 정리
+```
+
+- 처음 실행하면 `sailugr/sinergym:latest` (약 22GB)를 내려받는다. 디스크 여유를 먼저 확인할 것.
+- 두 단계로 돈다: `sinergym-collect` (Sinergym 이미지에서 1년 × 설정 온도 3개 시뮬레이션) →
+  `sinergym-validate` (우리 이미지에서 같은 IT 전력·외기온도를 우리 모델에 넣어 비교).
+- 결과: `output/validation/sinergym_samples.csv`, `sinergym_report.json`. 화면에 비교표가 나온다.
+- 종료 코드: 0 통과 / 1 오차 10% 초과 항목 있음 / 2 Sinergym 결과 없음.
+- 이미 수집한 CSV 가 있으면 Docker 없이 `python scripts/validate_sinergym.py` 로 비교만 다시 할 수 있다.
+- `docker compose up` 으로는 뜨지 않는다 (`validation` 프로필을 줄 때만 실행).
+
+결과 해석은 `docs/thermodynamics.md` 11장.
+
+## 5. 문제 해결
 
 | 증상 | 원인 / 해결 |
 |---|---|
@@ -58,7 +77,7 @@ docker compose exec mpc python scripts/benchmark_api.py    # 엔드포인트별 
 | 대시보드 "제어기 비교" 탭 오류 | `output/mpc/*.csv` 가 LFS 포인터 → `git lfs pull` |
 | 서비스가 `unhealthy` | `docker compose logs <서비스명>` 으로 오류 확인 |
 
-## 5. 확인 결과 기록
+## 6. 확인 결과 기록
 
 | 항목 | 결과 | 확인한 사람·날짜 |
 |---|---|---|

@@ -4,8 +4,9 @@
 # 실행 순서: twin → forecast → mpc → dashboard (앞 서비스의 /health 가 응답한 뒤 시작)
 # 모듈 간 통신은 REST 만 쓰며, 주소는 환경변수로 컨테이너 이름을 가리킨다 (config/settings.yaml 보다 우선).
 
+# 네 서비스가 같은 이미지를 쓴다. 빌드는 twin 한 곳에서만 한다:
+# 서비스마다 build 를 두면 같은 이미지를 네 번 동시에 내보내 디스크를 네 배로 쓰고 서로 충돌한다.
 x-app: &app
-  build: .
   image: codesey-idc:latest
   restart: unless-stopped
   environment:
@@ -22,6 +23,7 @@ x-healthcheck: &healthcheck
 services:
   twin:
     <<: *app
+    build: .
     command: ["uvicorn", "services.twin.main:app", "--host", "0.0.0.0", "--port", "8001"]
     ports: ["8001:8001"]
     healthcheck:
@@ -61,3 +63,24 @@ services:
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+
+  # 열역학 모델 vs Sinergym(EnergyPlus) 비교 검증. 평소에는 뜨지 않고 아래 명령으로만 실행한다 (1년 × 3회, 약 3분):
+  #   docker compose --profile validation run --rm sinergym-validate
+  # 결과는 output/validation/ 에 남는다. 두 단계로 나뉜다:
+  #   sinergym-collect   Sinergym·EnergyPlus 설치가 무거워 공식 이미지(약 22GB)에서 1년 시뮬레이션만 돌린다
+  #   sinergym-validate  우리 이미지에서 같은 조건을 우리 모델에 넣어 비교한다 (수집이 끝난 뒤 시작)
+  sinergym-collect:
+    profiles: [validation]
+    image: sailugr/sinergym:latest
+    working_dir: /repo
+    volumes: ["./:/repo"]
+    entrypoint: ["python", "scripts/sinergym_collect.py"]
+
+  sinergym-validate:
+    profiles: [validation]
+    image: codesey-idc:latest
+    build: .
+    volumes: ["./:/app"]                 # 이미지에 구워진 코드 대신 지금 저장소의 코드·결과 폴더를 쓴다
+    depends_on:
+      sinergym-collect: {condition: service_completed_successfully}
+    command: ["python", "scripts/validate_sinergym.py"]

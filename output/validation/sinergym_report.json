@@ -1,0 +1,159 @@
+{
+    "sinergym_version": "3.12.0",
+    "env": "Eplus-datacenter_cw-mixed-continuous-stochastic-v1",
+    "seed": 0,
+    "baseline_setpoint_c": 25.0,
+    "tolerance_pct": 10.0,
+    "hours": 8760,
+    "outdoor_range_c": [
+        -12.98313,
+        35.62954
+    ],
+    "it_power_range_kw": [
+        73.59794,
+        117.0922
+    ],
+    "metrics": [
+        {
+            "name": "냉각 전력량",
+            "unit": "MWh",
+            "own": 121.65785815606728,
+            "sinergym": 123.51907852000001,
+            "error_pct": -1.5068282456716715,
+            "passed": true
+        },
+        {
+            "name": "PUE (IT + 냉각)",
+            "unit": "",
+            "own": 1.1353528233754524,
+            "sinergym": 1.1374235603997636,
+            "error_pct": -0.18205504935939287,
+            "passed": true
+        }
+    ],
+    "passed": true,
+    "hourly_cooling_nmae_pct": 24.491972482666796,
+    "by_outdoor_band": [
+        {
+            "outdoor_from_c": -50.0,
+            "outdoor_to_c": 5.0,
+            "hours": 2287,
+            "sinergym_cop": 15.002376539215886,
+            "own_cop": 17.104999999999997,
+            "cooling_error_pct": -12.292449346881687
+        },
+        {
+            "outdoor_from_c": 5.0,
+            "outdoor_to_c": 15.0,
+            "hours": 2733,
+            "sinergym_cop": 19.604279275512283,
+            "own_cop": 17.105,
+            "cooling_error_pct": 14.611395939855495
+        },
+        {
+            "outdoor_from_c": 15.0,
+            "outdoor_to_c": 18.0,
+            "hours": 726,
+            "sinergym_cop": 8.145915145107534,
+            "own_cop": 9.429406447461508,
+            "cooling_error_pct": -13.61158106297881
+        },
+        {
+            "outdoor_from_c": 18.0,
+            "outdoor_to_c": 25.0,
+            "hours": 1998,
+            "sinergym_cop": 4.049935935717221,
+            "own_cop": 4.0887726424038435,
+            "cooling_error_pct": -0.9498377650998628
+        },
+        {
+            "outdoor_from_c": 25.0,
+            "outdoor_to_c": 50.0,
+            "hours": 1016,
+            "sinergym_cop": 3.2269599873985206,
+            "own_cop": 3.261,
+            "cooling_error_pct": -1.0438519657000684
+        }
+    ],
+    "total_pue": {
+        "own": 1.1853528233754524,
+        "sinergym": 1.2374235602851689,
+        "own_other_ratio": 0.05,
+        "sinergym_other_ratio": 0.09999999988540535
+    },
+    "loading_approximation": {
+        "approx_it_mean_kw": 79.02545833333333,
+        "actual_it_mean_kw": 102.60505104223745,
+        "cooling_error_pct": -23.057511017344282
+    },
+    "setpoint_sensitivity": [
+        {
+            "sinergym_setpoint_c": 22.0,
+            "delta_c": -3.0,
+            "own_setpoint_c": 17.0,
+            "sinergym_it_change_pct": -13.179342155258192,
+            "sinergym_cooling_change_pct": 7.044487316662658,
+            "sinergym_facility_change_pct": -10.933360458471071,
+            "own_it_change_pct": 0.0,
+            "own_cooling_change_pct": 16.479803819354554,
+            "own_facility_change_pct": 1.8817924348223356
+        },
+        {
+            "sinergym_setpoint_c": 25.0,
+            "delta_c": 0.0,
+            "own_setpoint_c": 20.0,
+            "sinergym_it_change_pct": 0.0,
+            "sinergym_cooling_change_pct": 0.0,
+            "sinergym_facility_change_pct": 0.0,
+            "own_it_change_pct": 0.0,
+            "own_cooling_change_pct": 0.0,
+            "own_facility_change_pct": 0.0
+        },
+        {
+            "sinergym_setpoint_c": 28.0,
+            "delta_c": 3.0,
+            "own_setpoint_c": 23.0,
+            "sinergym_it_change_pct": 9.923980457140159,
+            "sinergym_cooling_change_pct": -15.33320765255983,
+            "sinergym_facility_change_pct": 7.119013076982434,
+            "own_it_change_pct": 0.0,
+            "own_cooling_change_pct": -16.88996780104231,
+            "own_facility_change_pct": -1.9286281548488997
+        }
+    ],
+    "calibration": {
+        "current": {
+            "free_cooling_cop": 17.105,
+            "chiller_cop_ref": 5.856,
+            "chiller_cop_slope": 0.459,
+            "chiller_cop_min": 3.261
+        },
+        "fitted": {
+            "free_cooling_cop": 17.105,
+            "chiller_cop_ref": 5.856,
+            "chiller_cop_slope": 0.459,
+            "chiller_cop_min": 3.261
+        },
+        "metrics": [
+            {
+                "name": "냉각 전력량",
+                "unit": "MWh",
+                "own": 121.65636614987612,
+                "sinergym": 123.51907852000001,
+                "error_pct": -1.5080361612495998,
+                "passed": true
+            },
+            {
+                "name": "PUE (IT + 냉각)",
+                "unit": "",
+                "own": 1.1353511634148585,
+                "sinergym": 1.1374235603997636,
+                "error_pct": -0.1822009897681959,
+                "passed": true
+            }
+        ],
+        "passed": true,
+        "hourly_cooling_nmae_pct": 24.4931481533469,
+        "worst_band_error_pct": 14.612075804395852
+    }
+}
