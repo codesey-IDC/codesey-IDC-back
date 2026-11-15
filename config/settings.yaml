@@ -5,6 +5,8 @@
 # 비밀값(API 키)은 이 파일에 쓰지 않고 환경변수 이름만 적는다.
 #
 # 값 옆 [복원] = 원본 데이터(synthetic_idc_90d.parquet)에서 역으로 찾은 값. 바꾸면 데이터 재현이 깨진다.
+#      [보정] = Sinergym(EnergyPlus) 1년 결과에 맞춘 값 (scripts/validate_sinergym.py, docs/thermodynamics.md 11장).
+#               데이터의 cooling_power_kw·pue 열은 이 값으로 다시 계산해 두었다 (scripts/recompute_cooling_columns.py).
 #      [가정] = 데이터에 없어 문헌·상식으로 정한 값. 근거 자료가 생기면 바꾼다.
 
 # ---------------------------------------------------------------- 서비스 주소
@@ -44,11 +46,11 @@ datacenter:
   # 냉각 방식 전환과 효율 (외기온도 기준)
   free_cooling_full_below_c: 15.0  # [복원] 이 외기온도 이하: 외기 냉각 100%
   free_cooling_none_above_c: 18.0  # [복원] 이 외기온도 이상: 외기 냉각 0% (칠러만)
-  free_cooling_cop: 13.0           # [복원]
-  chiller_cop_ref: 4.8             # [복원] 외기 18℃ 에서 칠러 COP
+  free_cooling_cop: 17.105         # [보정] 원래 13.0
+  chiller_cop_ref: 5.856           # [보정] 외기 18℃ 에서 칠러 COP. 원래 4.8
   chiller_cop_ref_temp_c: 18.0     # [복원]
-  chiller_cop_slope: 0.4           # [복원] 외기 1℃ 오를 때 COP 감소
-  chiller_cop_min: 2.7             # [복원]
+  chiller_cop_slope: 0.459         # [보정] 외기 1℃ 오를 때 COP 감소. 원래 0.4
+  chiller_cop_min: 3.261           # [보정] 원래 2.7
 
   # 제어 변수: 공급 공기 설정 온도
   supply_temp_ref_c: 20.0          # [가정] 원본 데이터가 쓴 것으로 보는 기준 설정 온도
@@ -150,9 +152,9 @@ mpc:
   naive_window_hours: 3                # 예측 불신 시: 최근 N시간 최대 부하가 계속된다고 가정
   use_tes: true                        # 냉수 축열조 출력도 함께 최적화
   # 최적화: scipy.optimize.differential_evolution (vectorized: 한 세대를 트윈 batch API 1회로 평가)
-  # Test 14일 비교: 8×5 → 요금 절감 10.88% (0.25초/결정), 15×5 → 11.11% (0.41초), 25×6 → 11.41% (0.74초)
-  de_popsize: 6                        # 세대당 후보 수 = popsize × 결정 변수 수 (축열조 포함 18 → 108)
-  de_maxiter: 25                       # 최대 세대 수
+  # Test 14일 비교: 60세대 × 후보 15 → 요금 절감 10.23% (2.7초/결정)
+  de_popsize: 15                       # 세대당 후보 수 = popsize × 결정 변수 수 (축열조 포함 18 → 108)
+  de_maxiter: 60                       # 최대 세대 수
   de_mutation: [0.5, 1.0]
   de_recombination: 0.7
   de_tol: 0.0001

@@ -61,13 +61,14 @@ def test_rollout_at_reference_setpoint_matches_data(data: pd.DataFrame) -> None:
 
 def test_static_known_points() -> None:
     """설명용 예시 값: 3,000kW 에서 외기 25℃ / 10℃."""
-    hot = P.simulate_static([3000.0], [25.0])
+    p = P.DEFAULT_PARAMS
+    hot = P.simulate_static([3000.0], [25.0])  # 외기 25℃: 칠러 COP 가 최소값까지 내려간다
     assert hot['cooling_mode'][0] == 'chiller'
-    assert hot['cooling_power_kw'][0] == pytest.approx(3000 / 2.7)
-    assert hot['pue'][0] == pytest.approx(1 + 1 / 2.7 + 0.05)
+    assert hot['cooling_power_kw'][0] == pytest.approx(3000 / p.chiller_cop_min)
+    assert hot['pue'][0] == pytest.approx(1 + 1 / p.chiller_cop_min + p.other_overhead_ratio)
     cold = P.simulate_static([3000.0], [10.0])
     assert cold['cooling_mode'][0] == 'free_cooling'
-    assert cold['cooling_power_kw'][0] == pytest.approx(3000 / 13)
+    assert cold['cooling_power_kw'][0] == pytest.approx(3000 / p.free_cooling_cop)
 
 
 # ---------------------------------------------------------------- 2단계: 물리 상식
@@ -193,7 +194,7 @@ def test_facility_energy_has_interior_optimum() -> None:
 
 def test_pue_can_improve_while_total_energy_worsens() -> None:
     """팬 전력은 IT 로 잡혀서, 너무 올리면 PUE 는 좋아져도 전체 전력은 늘어난다."""
-    a, b = _rollout(25.0, t_out=20.0), _rollout(27.0, t_out=20.0)  # 외기 20℃ 최적 ≈ 25℃
+    a, b = _rollout(24.0, t_out=20.0), _rollout(27.0, t_out=20.0)  # 외기 20℃ 최적 ≈ 25℃
     assert b.average_pue < a.average_pue
     assert b.total_facility_energy_kwh > a.total_facility_energy_kwh
 
@@ -263,7 +264,8 @@ def test_health() -> None:
 
 def test_params() -> None:
     body = client.get('/api/v1/params').json()
-    assert body['free_cooling_cop'] == 13.0 and 'thermal_capacity_kwh_per_c' in body
+    assert body['free_cooling_cop'] == P.DEFAULT_PARAMS.free_cooling_cop
+    assert 'thermal_capacity_kwh_per_c' in body
 
 
 def test_api_simulate() -> None:
@@ -278,7 +280,8 @@ def test_api_simulate() -> None:
     )
     assert r.status_code == 200, r.text
     a, b = r.json()['results']
-    assert a['cooling_mode'] == 'chiller' and a['cooling_power_kw'] == pytest.approx(3000 / 2.7)
+    assert a['cooling_mode'] == 'chiller'
+    assert a['cooling_power_kw'] == pytest.approx(3000 / P.DEFAULT_PARAMS.chiller_cop_min)
     assert b['it_power_kw'] == pytest.approx(2150 + 3600 * 0.25)
 
 

@@ -15,7 +15,7 @@
 - 단위는 필드 이름 끝에 붙인다: `_kw`(kW), `_kwh`(kWh), `_c`(℃), `_krw`(원), `_min`(분), `_pct`(%).
 - 오류: `422` 입력 오류(형식·범위·길이), `404` 없는 자원, `503` 의존 서비스나 모델 없음. 본문은 `{"detail": "..."}`.
 - 서비스 주소는 `config/settings.yaml` 의 `services`, 환경변수 `TWIN_URL`, `FORECAST_URL`, `MPC_URL` 이 우선한다.
-- 응답 시간 (실측 p95, `python scripts/benchmark_api.py`): MPC 제어 0.44초, 나머지 0.05초 이하. 기준 10초.
+- 응답 시간 (실측 p95, `python scripts/benchmark_api.py`): MPC 제어 2.70초, 나머지 0.11초 이하. 기준 10초.
 
 ---
 
@@ -203,7 +203,7 @@ curl -X POST :8003/api/v1/control/optimize -H 'Content-Type: application/json' \
 `control/mpc` 와 같은 계산. 요청에 `history[]`(필수, 최소 168)와 `outdoor_forecast_c[]`(필수, 24개)를 직접 넣는다.
 
 ### `POST /api/v1/simulate/jobs` — 폐루프 시뮬레이션 작업 등록 (202)
-매시간 제어기가 설정을 정하고 트윈을 1시간 진행하는 실험. MPC 는 1시간당 약 0.4초라 백그라운드 작업으로 돌린다.
+매시간 제어기가 설정을 정하고 트윈을 1시간 진행하는 실험. MPC 는 1시간당 약 2.6초라 백그라운드 작업으로 돌린다.
 
 요청 (`SimulateRequest`)
 | 필드 | 타입 | 설명 |
