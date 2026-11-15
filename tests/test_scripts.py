@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from scripts import benchmark_api
 import scripts.evaluate_cooling_forecast as ECF
+import scripts.sensitivity_analysis as SENS
 import scripts.simulate_mpc as SIM
 import scripts.train_forecast as TF
 import scripts.train_ridge as TR
@@ -70,6 +71,58 @@ def test_simulate_mpc_surge(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     SIM.main()
     m = json.loads((tmp_path / 'metrics_surge.json').read_text(encoding='utf-8'))
     assert m['scenario'] == 'surge' and m['controllers']['mpc']['naive_forecast_hours'] > 0
+
+
+def test_noisy_forecast_passthrough_and_bias() -> None:
+    """오차 0 이면 예측 서비스 응답 그대로, 편향 +10% 면 예측값이 정확히 1.1배."""
+    hourly = SIM.load_hourly()
+    now = pd.Timestamp('2026-06-04 00:00')
+    hist = hourly.it_power_kw.loc[now - pd.Timedelta(hours=192) : now - pd.Timedelta(hours=1)]
+    body = {
+        'horizon_hours': 24,
+        'history': [
+            {'timestamp': t.isoformat(), 'it_power_kw': float(v)} for t, v in hist.items()
+        ],
+    }
+    inner = TestClient(forecast_svc.app)
+    clean = inner.post('/api/v1/forecast', json=body).json()['predictions']
+    same = SIM.NoisyForecast(inner).post('/api/v1/forecast', json=body).json()['predictions']
+    biased = SIM.NoisyForecast(inner, bias_pct=10).post('/api/v1/forecast', json=body)
+    noisy = SIM.NoisyForecast(inner, noise_pct=10).post('/api/v1/forecast', json=body)
+    assert same == clean
+    assert np.allclose(biased.json()['predictions'], np.array(clean) * 1.1)
+    assert biased.status_code == 200 and noisy.json()['predictions'] != clean
+
+
+@needs_model
+def test_simulate_latency_delays_setpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """지연 2시간이면 처음 2시간은 기준값 유지, 그 뒤 설정 온도는 지연 0 의 2시간 전 값과 같다."""
+    monkeypatch.setattr(SIM, 'MPCConfig', lambda **kw: FAST)
+    hourly, twin = SIM.load_hourly(), TestClient(twin_app)
+    start = pd.Timestamp('2026-06-04 00:00')
+    df0, _ = SIM.run(hourly, start, 4, 'reactive', twin, TestClient(forecast_svc.app))
+    df2, _ = SIM.run(hourly, start, 4, 'reactive', twin, TestClient(forecast_svc.app), latency_h=2)
+    assert list(df2.setpoint_c[:2]) == [20.0, 20.0]
+    assert list(df2.setpoint_c[2:]) == list(df0.setpoint_c[:2])
+
+
+@needs_model
+def test_sensitivity_main(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """조건 4개 × 6시간으로 분석 전체 흐름(표·JSON·그래프)을 돌린다."""
+    monkeypatch.setattr(SIM, 'OUT_DIR', str(tmp_path))
+    monkeypatch.setattr(SIM, 'MPCConfig', lambda **kw: FAST)
+    cases = [c for c in SENS.default_cases() if c.name in ('rule_pid', 'mpc', 'latency_1h')]
+    cases += [c for c in SENS.default_cases() if c.group in ('it_noise', 'it_bias', 'outdoor')][
+        ::3
+    ]
+    monkeypatch.setattr(SENS, 'default_cases', lambda: cases)
+    _argv(monkeypatch, '--days', '1', '--start', '2026-06-04 00:00', '--workers', '1')
+    SENS.main()
+    r = json.loads((tmp_path / 'sensitivity.json').read_text(encoding='utf-8'))
+    by = {c['name']: c for c in r['cases']}
+    assert by['mpc']['pue_change'] == 0.0 and by['rule_pid']['cost_saving_vs_rule_pid_pct'] == 0.0
+    assert all(c['violation_hours'] == 0 for c in r['cases'])
+    assert (tmp_path / 'sensitivity.png').stat().st_size > 10_000
 
 
 # ------------------------------------------------ scripts/evaluate_cooling_forecast.py
