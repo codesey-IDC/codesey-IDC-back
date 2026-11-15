@@ -1,0 +1,187 @@
+# IDC 냉각 최적화 시스템 설정
+#
+# 모든 서비스(트윈·예측·MPC)와 대시보드, 실행 스크립트가 이 파일을 읽는다.
+# 다른 파일을 쓰려면 환경변수 IDC_CONFIG 에 경로를 준다.
+# 비밀값(API 키)은 이 파일에 쓰지 않고 환경변수 이름만 적는다.
+#
+# 값 옆 [복원] = 원본 데이터(synthetic_idc_90d.parquet)에서 역으로 찾은 값. 바꾸면 데이터 재현이 깨진다.
+#      [가정] = 데이터에 없어 문헌·상식으로 정한 값. 근거 자료가 생기면 바꾼다.
+
+# ---------------------------------------------------------------- 서비스 주소
+# 환경변수 TWIN_URL / FORECAST_URL / MPC_URL 이 있으면 그 값이 우선한다 (Docker 등).
+# localhost 대신 127.0.0.1: Windows 에서 localhost 는 연결마다 약 2초 지연된다.
+services:
+  twin_url: http://127.0.0.1:8001
+  forecast_url: http://127.0.0.1:8002
+  mpc_url: http://127.0.0.1:8003
+  timeout_s: 30.0
+
+# ---------------------------------------------------------------- 파일 경로 (저장소 루트 기준)
+paths:
+  data: data/synthetic_idc_90d.parquet
+  forecast_models: output/forecast/models
+  mpc_results: output/mpc
+
+# ---------------------------------------------------------------- IT 부하 예측
+# scripts/compare_forecast_models.py: Val MAPE 로 선정. ridge (Val 24h 0.884%) < lgbm (0.983%) < 1주 전 값 (1.348%)
+forecast:
+  model: ridge                     # 서비스 기본 모델: ridge (scripts/train_ridge.py) | lgbm (scripts/train_forecast.py)
+
+# ---------------------------------------------------------------- 외부 데이터 수집
+weather:
+  api_key_env: KMA_API_KEY        # 기상청 공공데이터포털 서비스 키를 담은 환경변수 이름
+  station_id: 108                 # ASOS 관측소 (108 서울, 119 수원, 112 인천, 133 대전, 156 광주, 159 부산)
+
+# ---------------------------------------------------------------- 가상 데이터센터 (디지털 트윈)
+datacenter:
+  # 서버 전력 (SPECpower 선형 모델: P = P_idle + (P_max - P_idle) × CPU 사용률)
+  # 서버 수 × 서버당 전력 = 원본 데이터의 IT 전력 2,150 ~ 5,750 kW 와 정확히 같다.
+  num_servers: 10000              # [복원] 대수
+  server_idle_power_w: 215.0      # [복원] CPU 0% 일 때 서버 1대 전력
+  server_max_power_w: 575.0       # [복원] CPU 100% 일 때 서버 1대 전력
+  other_overhead_ratio: 0.05      # [복원] 조명·UPS 등 기타 손실 (IT 전력 대비)
+
+  # 냉각 방식 전환과 효율 (외기온도 기준)
+  free_cooling_full_below_c: 15.0  # [복원] 이 외기온도 이하: 외기 냉각 100%
+  free_cooling_none_above_c: 18.0  # [복원] 이 외기온도 이상: 외기 냉각 0% (칠러만)
+  free_cooling_cop: 13.0           # [복원]
+  chiller_cop_ref: 4.8             # [복원] 외기 18℃ 에서 칠러 COP
+  chiller_cop_ref_temp_c: 18.0     # [복원]
+  chiller_cop_slope: 0.4           # [복원] 외기 1℃ 오를 때 COP 감소
+  chiller_cop_min: 2.7             # [복원]
+
+  # 제어 변수: 공급 공기 설정 온도
+  supply_temp_ref_c: 20.0          # [가정] 원본 데이터가 쓴 것으로 보는 기준 설정 온도
+  supply_temp_min_c: 16.0          # [가정]
+  supply_temp_max_c: 27.0          # [가정]
+
+  # 서버실 (상태)
+  room_temp_min_c: 18.0            # [가정] 서버 흡기 허용 범위 (ASHRAE A1 권장 18~27℃)
+  room_temp_max_c: 27.0            # [가정]
+  thermal_capacity_kwh_per_c: 200.0  # [가정] 서버실 유효 열용량 (공기+구조체+장비)
+
+  # 공기측 냉각 부하 Q = ṁ × c_p × ΔT  (CRAH 가 서버를 지난 공기를 설정 온도까지 식힌다)
+  air_mass_flow_kg_s: 250.0        # [가정] CRAH 공기 유량. IT 3,000kW 에서 서버 앞뒤 온도차 약 12℃ (일반 10~15℃)
+  air_cp_kj_per_kg_k: 1.005        # [물성] 공기 정압비열
+
+  # 냉각 설비 용량
+  chiller_units: 4                 # [가정] 칠러 대수 (고장 시나리오에서 1대 탈락)
+  cooling_capacity_kw: 5000.0      # [가정] 냉각 설비 전체 최대 제거열
+
+  # 냉수 축열조 (TES): 싼 시간에 칠러로 냉수를 만들어 저장, 비싼 시간에 칠러 대신 냉각
+  # 출력 +충전 / -방전 (냉열 kW). 방전은 칠러가 맡던 부분만 대신한다 (외기 냉각분 제외).
+  tes_capacity_kwh: 12000.0        # [가정] IT 3,000kW 냉각 약 4시간분. 물 온도차 8℃ 기준 탱크 약 1,300㎥
+  tes_max_charge_kw: 2000.0        # [가정] 최대 충전 속도
+  tes_max_discharge_kw: 3000.0     # [가정] 최대 방전 속도
+  tes_charge_efficiency: 0.9       # [가정] 충전 시 칠러 COP 배율 (저장용 냉수를 더 차갑게 만들어야 함)
+  tes_loss_per_h: 0.002            # [가정] 시간당 자연 손실 비율 (저장량 대비)
+  tes_initial_soc: 0.5             # [가정] 시뮬레이션 시작 저장량 비율
+
+  # 설정 온도를 올릴 때의 단점
+  fan_threshold_c: 24.0            # [가정] 이 온도까지는 서버 팬이 최저 속도
+  fan_power_coef_per_c2: 0.0033333333333333335  # [가정] (T - 기준)² × 계수 = IT 전력 증가 비율 (27℃ → +3%)
+  critical_temp_c: 32.0            # [가정] 위험 온도 (ASHRAE A1 허용 최대)
+  min_ride_through_min: 15.0       # [가정] 냉각 정지 시 최소 버텨야 하는 시간(분)
+
+# ---------------------------------------------------------------- 전기요금 (시간대별)
+# 출처: docs/references/kepco_tariff_general_2026.pdf (한전 전기요금표, 2026-06-01 시행)
+# 데이터센터는 산업용이 아니라 일반용 전기요금을 적용받는다. 계약전력 300kW 이상 → 일반용전력(을).
+# 선택Ⅲ: "기본요금이 높고 전력량요금이 낮아 전기사용시간이 월 500시간 초과 고객에게 유리" (24시간 운영)
+# 가정: 시뮬레이션 데이터(2026-03~06) 전체에 이 요금표를 적용한다.
+tariff:
+  name: 일반용전력(을) 고압A 선택Ⅲ
+  source: docs/references/kepco_tariff_general_2026.pdf
+  effective_date: '2026-06-01'
+  basic_charge_krw_per_kw: 9810.0      # 계약전력 기준 고정비. 시간별 제어와 무관해 비용 비교에서는 제외
+  seasons:                             # 월 → 계절
+    summer: [6, 7, 8]
+    spring_fall: [3, 4, 5, 9, 10]
+    winter: [11, 12, 1, 2]
+  # 시간대 구분: [시작시, 끝시) 목록. 나머지 시간은 경부하.
+  periods:
+    summer:
+      mid: [[8, 15], [21, 22]]
+      peak: [[15, 21]]
+    spring_fall:
+      mid: [[8, 15], [21, 22]]
+      peak: [[15, 21]]
+    winter:
+      mid: [[8, 9], [12, 16], [19, 22]]
+      peak: [[9, 12], [16, 19]]
+  rates_krw_per_kwh:                   # 전력량요금
+    summer:      {off_peak: 86.4, mid: 139.6, peak: 209.9}
+    spring_fall: {off_peak: 86.4, mid: 108.5, peak: 132.2}
+    winter:      {off_peak: 93.7, mid: 139.8, peak: 186.7}
+  saturday_peak_as_mid: true           # 토요일: 최대부하 시간대 사용량 → 중간부하로 계량
+  sunday_as_holiday: true              # 공휴일(일요일 포함): 모든 시간 → 경부하로 계량
+  holidays:                            # [확인 필요] 관공서 공휴일 (임시공휴일 제외)
+    - '2026-05-05'                     # 어린이날
+    - '2026-05-25'                     # 부처님오신날(5/24 일요일) 대체공휴일
+    - '2026-06-03'                     # 전국동시지방선거
+    - '2026-06-06'                     # 현충일
+  # 시간대와 무관하게 kWh 마다 같은 금액이 붙는 항목. 요금표 PDF 에 단가가 없어 0 으로 둔다.
+  # 모든 제어기에 같은 비율로 붙어 절감률 순위에는 영향이 없다. 부가세·전력기금도 같은 이유로 제외.
+  climate_env_krw_per_kwh: 0.0         # 기후환경요금
+  fuel_adjust_krw_per_kwh: 0.0         # 연료비조정요금 (±5원/kWh 범위)
+
+# ---------------------------------------------------------------- ESG
+esg:
+  carbon_factor_tco2_per_mwh: 0.459   # 국내 전력 배출계수 (과제 지정)
+  water_intensity_l_per_kwh:          # [가정] 제거열 1kWh 당 물 사용량 (칠러 냉각탑 증발 > 혼합 > 외기 냉각)
+    chiller: 1.8
+    hybrid: 1.0
+    free_cooling: 0.3
+
+# ---------------------------------------------------------------- Rule-based 컨트롤러 (MPC 비교 기준)
+# 서버실 온도를 목표에 맞추도록 공급 공기 설정 온도를 PID 로 조절한다.
+rule_based:
+  target_room_temp_c: 20.0             # 목표 서버실 온도. 원본 데이터의 운영 방식(20℃)과 같게
+  kp: 0.3                              # 비례 계수 (℃/℃). 서버실이 1시간에 설정 변화의 약 70% 를 따라가므로 작게
+  ki_per_h: 0.1                        # 적분 계수 (1/h). 0.8/0.4 는 25℃ 시작 시 18.4℃ 까지 넘쳐 출렁였다
+  kd_h: 0.0                            # 미분 계수 (h). 시간 단위 제어라 기본은 끔
+  dt_hours: 1.0                        # 제어 주기
+
+# ---------------------------------------------------------------- MPC
+mpc:
+  objective: cost                      # cost: 전기요금(원) 최소화 (과제 요구) | energy: 전체 전력량(kWh) 최소화
+  horizon_hours: 24
+  blocks: [1, 1, 1, 1, 2, 2, 4, 4, 8]  # 결정 변수 묶음 (시간). 합 = horizon_hours
+  max_setpoint_rate_c_per_h: 2.0       # 제어 변화율 제약: 설정 온도는 시간당 ±2℃ 이내 (모든 후보 계획에 강제)
+  naive_window_hours: 3                # 예측 불신 시: 최근 N시간 최대 부하가 계속된다고 가정
+  use_tes: true                        # 냉수 축열조 출력도 함께 최적화
+  # 최적화: scipy.optimize.differential_evolution (vectorized: 한 세대를 트윈 batch API 1회로 평가)
+  # Test 14일 비교: 8×5 → 요금 절감 10.88% (0.25초/결정), 15×5 → 11.11% (0.41초), 25×6 → 11.41% (0.74초)
+  de_popsize: 6                        # 세대당 후보 수 = popsize × 결정 변수 수 (축열조 포함 18 → 108)
+  de_maxiter: 25                       # 최대 세대 수
+  de_mutation: [0.5, 1.0]
+  de_recombination: 0.7
+  de_tol: 0.0001
+  # 벌점은 kWh 로 적는다. objective 가 cost 면 그 계획 구간의 평균 단가(원/kWh)를 곱해 원으로 바꾼다.
+  violation_penalty_kwh: 100000.0      # 위반 구간 1개당 벌점
+  reliability_weight_kwh_per_h: 20.0   # (고장률 - 1) × 시간당 벌점
+  move_weight_kwh_per_c: 30.0          # 설정 온도 1℃ 변경당 벌점
+  seed: 0
+
+# ---------------------------------------------------------------- 폐루프 시뮬레이션
+simulation:
+  history_hours: 192                   # 예측 모델 입력(최소 168시간)에 여유를 둔 이력 길이
+  test_start: '2026-05-30 00:00'       # scripts/simulate_mpc.py 기본 시작 (예측 모델 Test 구간)
+
+# ---------------------------------------------------------------- 위기 시나리오
+# it_scale: IT 부하 배율 / outdoor_min_c: 외기온도 하한 / failed_chillers: 탈락한 칠러 대수
+scenarios:
+  normal:
+    label: 정상 운영
+    strategy: 예측 기반 설정 온도 최적화
+  server_surge:
+    label: 서버 급증 (IT 부하 +30%)
+    strategy: 학습 범위 밖 부하 → 예측 대신 최근 최대 부하 유지 가정(mpc_naive)으로 계획
+    it_scale: 1.3
+  chiller_failure:
+    label: 칠러 고장 (4대 중 1대 탈락)
+    strategy: 남은 냉각 용량 안에서 운전, 용량 한계에 걸리지 않게 설정 온도 조정
+    failed_chillers: 1
+  heatwave:
+    label: 폭염 (외기 38℃ 이상)
+    strategy: 외기 냉각 불가 → 칠러 효율이 좋아지는 선까지만 설정 온도 상향
+    outdoor_min_c: 38.0

@@ -1,6 +1,6 @@
 """IT 부하 예측용 피처 계산 (학습·서빙 공용).
 
-train_forecast.py(학습)와 services/forecast/predictor.py(서빙)가 모두 이 파일의
+scripts/train_forecast.py(학습)와 services/forecast/predictor.py(서빙)가 모두 이 파일의
 함수로 피처를 만든다. 한쪽에만 따로 피처 코드를 두면 나중에 한쪽만 바뀌어도
 에러 없이 틀린 예측이 나오므로, 피처 로직은 반드시 여기서만 수정한다.
 
@@ -14,6 +14,7 @@ train_forecast.py(학습)와 services/forecast/predictor.py(서빙)가 모두 �
   dayofweek         예측 대상 시각의 요일 (0=월 ~ 6=일)
   is_weekend        예측 대상 시각이 주말이면 1
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,9 +22,9 @@ import pandas as pd
 
 TARGET = 'it_power_kw'
 WEATHER_COLS = ['outdoor_temp_c', 'outdoor_humidity', 'wind_speed']
-RESAMPLE_RULE = 'h'           # 5분 데이터 → 1시간 평균
+RESAMPLE_RULE = 'h'  # 5분 데이터 → 1시간 평균
 HORIZONS = {'24h': 24, '168h': 168}
-MIN_HISTORY_HOURS = 168       # lag_168 때문에 최소 168시간 이력이 필요
+MIN_HISTORY_HOURS = 168  # lag_168 때문에 최소 168시간 이력이 필요
 ROLLING_HOURS = 24
 
 
@@ -65,9 +66,14 @@ def load_hourly(path: str) -> pd.DataFrame:
     return hourly
 
 
-def _feature_block(y: np.ndarray, idx: pd.DatetimeIndex, roll24: np.ndarray,
-                   origin: np.ndarray, h: int, use_lag24: bool
-                   ) -> tuple[dict, pd.DatetimeIndex]:
+def _feature_block(
+    y: np.ndarray,
+    idx: pd.DatetimeIndex,
+    roll24: np.ndarray,
+    origin: np.ndarray,
+    h: int,
+    use_lag24: bool,
+) -> tuple[dict, pd.DatetimeIndex]:
     """예측 시점 위치 origin(배열)에서 h시간 뒤를 맞히는 피처 블록 (공용 핵심).
 
     lag 위치가 origin 을 넘으면(=미래 참조) assert 로 멈춘다.
@@ -94,8 +100,9 @@ def _feature_block(y: np.ndarray, idx: pd.DatetimeIndex, roll24: np.ndarray,
     return cols, target_time
 
 
-def build_direct_dataset(hourly: pd.DataFrame, max_h: int,
-                         exog_cols: list[str] | None = None) -> pd.DataFrame:
+def build_direct_dataset(
+    hourly: pd.DataFrame, max_h: int, exog_cols: list[str] | None = None
+) -> pd.DataFrame:
     """(학습용) 예측 시점 t 에서 h시간 뒤(t+h)를 맞히는 학습 행을 모두 만든다.
 
     반환 컬럼: origin_time, target_time, origin_day, target_day, 피처들, [exog], y

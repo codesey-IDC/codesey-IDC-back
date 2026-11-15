@@ -1,4 +1,5 @@
 """피처 계산(학습·서빙 공용) 테스트: 누수 없음, 순서 고정, 서빙 피처가 학습 피처와 같은 값."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -17,9 +18,24 @@ def _hourly(n: int = 400) -> pd.DataFrame:
 
 def test_feature_names_order() -> None:
     assert F.feature_names(24) == [
-        'h', 'last_value', 'rolling_mean_24h', 'lag_168', 'lag_24', 'hour', 'dayofweek', 'is_weekend']
+        'h',
+        'last_value',
+        'rolling_mean_24h',
+        'lag_168',
+        'lag_24',
+        'hour',
+        'dayofweek',
+        'is_weekend',
+    ]
     assert F.feature_names(168) == [
-        'h', 'last_value', 'rolling_mean_24h', 'lag_168', 'hour', 'dayofweek', 'is_weekend']
+        'h',
+        'last_value',
+        'rolling_mean_24h',
+        'lag_168',
+        'hour',
+        'dayofweek',
+        'is_weekend',
+    ]
 
 
 def test_model_key_for() -> None:
@@ -48,7 +64,9 @@ def test_direct_dataset_no_leakage() -> None:
     assert (data['lag_168'] == data['y'] - 168).all()
     assert (data['lag_24'] == data['y'] - 24).all()
     assert (data['last_value'] == data['y'] - data['h']).all()
-    assert (data['origin_time'] + pd.to_timedelta(data['h'], unit='h') == data['target_time']).all()
+    assert (
+        data['origin_time'] + pd.to_timedelta(data['h'], unit='h') == data['target_time']
+    ).all()
 
 
 def test_direct_dataset_168_has_no_lag24() -> None:
@@ -62,7 +80,7 @@ def test_forecast_features_match_training_rows() -> None:
     hourly = _hourly(300)
     y = hourly[F.TARGET]
     train = F.build_direct_dataset(hourly, 24)
-    origin = hourly.index[-25]            # 학습 행이 존재하려면 24시간 뒤가 데이터 안에 있어야 함
+    origin = hourly.index[-25]  # 학습 행이 존재하려면 24시간 뒤가 데이터 안에 있어야 함
     serve = F.build_forecast_features(y.loc[:origin], 24)
     ref = train[train['origin_time'] == origin].sort_values('h').set_index('target_time')
     pd.testing.assert_frame_equal(serve, ref[serve.columns], check_dtype=False, check_names=False)

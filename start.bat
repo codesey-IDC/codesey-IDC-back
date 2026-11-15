@@ -12,7 +12,7 @@ if errorlevel 1 (
     goto :fail
 )
 
-python -c "import fastapi, uvicorn, streamlit, plotly, lightgbm, httpx" >nul 2>nul
+python -c "import fastapi, uvicorn, streamlit, plotly, lightgbm, httpx, yaml" >nul 2>nul
 if errorlevel 1 (
     echo [오류] 필요한 패키지가 없습니다. 먼저 아래 명령을 실행해 주세요.
     echo        pip install -r requirements.txt

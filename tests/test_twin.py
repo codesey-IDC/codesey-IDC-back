@@ -1,7 +1,9 @@
 """디지털 트윈 테스트: 90일 데이터 재현, 기본 설정 = 정적 계산, 물리 상식, API."""
+
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -23,27 +25,34 @@ def data() -> pd.DataFrame:
 
 # ---------------------------------------------------------------- 1단계: 데이터 재현
 
+
 @needs_data
-def test_static_reproduces_90d_data(data) -> None:
+def test_static_reproduces_90d_data(data: pd.DataFrame) -> None:
     """원본 데이터 25,920행 전부를 복원 공식으로 재현."""
     it = P.it_power_from_cpu(data['cpu_utilization'])
     np.testing.assert_allclose(it, data['it_power_kw'], atol=1e-6)
 
     r = P.simulate_static(data['it_power_kw'], data['outdoor_temp_c'])
     np.testing.assert_allclose(r['cooling_power_kw'], data['cooling_power_kw'], atol=1e-6)
-    np.testing.assert_allclose(r['free_cooling_fraction'], data['free_cooling_fraction'], atol=1e-9)
+    np.testing.assert_allclose(
+        r['free_cooling_fraction'], data['free_cooling_fraction'], atol=1e-9
+    )
     np.testing.assert_allclose(r['pue'], data['pue'], atol=1e-9)
     np.testing.assert_allclose(r['server_heat_kw'], data['server_heat_kw'], atol=1e-6)
     assert (r['cooling_mode'] == data['cooling_mode'].to_numpy()).all()
 
 
 @needs_data
-def test_rollout_at_reference_setpoint_matches_data(data) -> None:
+def test_rollout_at_reference_setpoint_matches_data(data: pd.DataFrame) -> None:
     """기준 설정 온도 + 서버실 = 설정 온도로 시작하면 5분 단위 rollout 이 원본과 같다."""
     day = data.head(12 * 48)
     n = len(day)
-    r = P.rollout(day['it_power_kw'], day['outdoor_temp_c'],
-                  [P.DEFAULT_PARAMS.supply_temp_ref_c] * n, dt_hours=5 / 60)
+    r = P.rollout(
+        day['it_power_kw'],
+        day['outdoor_temp_c'],
+        [P.DEFAULT_PARAMS.supply_temp_ref_c] * n,
+        dt_hours=5 / 60,
+    )
     np.testing.assert_allclose(r.cooling_power_kw, day['cooling_power_kw'], atol=1e-6)
     np.testing.assert_allclose(r.pue, day['pue'], atol=1e-9)
     np.testing.assert_allclose(r.room_temp_c, P.DEFAULT_PARAMS.supply_temp_ref_c, atol=1e-9)
@@ -63,7 +72,10 @@ def test_static_known_points() -> None:
 
 # ---------------------------------------------------------------- 2단계: 물리 상식
 
-def _rollout(supply, it=3000.0, t_out=20.0, hours=24, **kw):
+
+def _rollout(
+    supply: float, it: float = 3000.0, t_out: float = 20.0, hours: int = 24, **kw: Any
+) -> P.RolloutResult:
     return P.rollout([it] * hours, [t_out] * hours, [supply] * hours, **kw)
 
 
@@ -90,9 +102,48 @@ def test_cooling_off_heats_room() -> None:
 
 
 def test_room_converges_to_new_setpoint() -> None:
+    """설정 20→24℃: C dT/dt = -ṁc_p (T - 24) 의 해 T = 24 - 4 e^(-ṁc_p t / C) 를 따라간다.
+
+    24℃ 이하라 팬 전력 증가는 없다.
+    """
+    p = P.DEFAULT_PARAMS
     r = _rollout(24.0, hours=6, initial_room_temp_c=20.0)
-    assert r.room_temp_c[0] > 23.9
-    assert r.room_temp_c[-1] == pytest.approx(24.0, abs=1e-6)
+    exact = [
+        24.0 - 4.0 * np.exp(-p.air_heat_rate_kw_per_c * t / p.thermal_capacity_kwh_per_c)
+        for t in range(1, 7)
+    ]
+    np.testing.assert_allclose(r.room_temp_c, exact, atol=0.15)  # 5분 간격 적분 오차 이내
+    assert r.room_temp_c[-1] == pytest.approx(24.0, abs=0.01)
+
+
+# ---------------------------------------------------------------- 냉각 부하 Q = ṁ c_p ΔT
+
+
+def test_cooling_load_formula() -> None:
+    """Q = ṁ × c_p × (T_return - T_supply). 250kg/s × 1.005 × 12℃ = 3,015kW."""
+    p = P.DEFAULT_PARAMS
+    assert p.air_heat_rate_kw_per_c == pytest.approx(250.0 * 1.005)
+    assert P.cooling_load(32.0, 20.0) == pytest.approx(250.0 * 1.005 * 12.0)
+    assert P.rack_delta_t(3000.0) == pytest.approx(3000.0 / (250.0 * 1.005))
+    assert P.return_air_temp(20.0, 3000.0) == pytest.approx(20.0 + 3000.0 / (250.0 * 1.005))
+
+
+def test_static_cooling_load_equals_heat_at_steady_state() -> None:
+    """정상 상태(서버실 = 공급 온도)에서 공기측 냉각 부하 = 서버 발열, 환기 온도 = 공급 + ΔT_rack."""
+    r = P.simulate_static([3000.0, 4500.0], [25.0, 10.0], [24.0, 26.0])
+    np.testing.assert_allclose(r['cooling_load_kw'], r['server_heat_kw'])
+    np.testing.assert_allclose(
+        r['return_air_temp_c'], np.array([24.0, 26.0]) + r['server_heat_kw'] / (250 * 1.005)
+    )
+    assert (r['air_mass_flow_kg_s'] == 250.0).all()
+
+
+def test_warmer_room_means_more_cooling_load() -> None:
+    """서버실이 설정보다 2℃ 더우면 ṁc_p × 2℃ 만큼 더 빼낸다 (첫 5분)."""
+    p = P.DEFAULT_PARAMS
+    r = P.rollout([3000.0], [25.0], [20.0], initial_room_temp_c=22.0, dt_hours=5 / 60)
+    assert r.heat_removed_kw[0] == pytest.approx(3000.0 + p.air_heat_rate_kw_per_c * 2.0)
+    assert r.return_air_temp_c[0] > r.room_temp_c[0]
 
 
 def test_energy_balance() -> None:
@@ -107,6 +158,7 @@ def test_energy_balance() -> None:
 
 
 # ---------------------------------------------------------------- 설정 온도의 단점
+
 
 def test_no_downside_at_reference() -> None:
     """기준 20℃ 에서는 팬 증가 0, 고장률 1.0 (원본 데이터와 같은 조건)."""
@@ -141,7 +193,7 @@ def test_facility_energy_has_interior_optimum() -> None:
 
 def test_pue_can_improve_while_total_energy_worsens() -> None:
     """팬 전력은 IT 로 잡혀서, 너무 올리면 PUE 는 좋아져도 전체 전력은 늘어난다."""
-    a, b = _rollout(25.0, t_out=20.0), _rollout(27.0, t_out=20.0)   # 외기 20℃ 최적 ≈ 25℃
+    a, b = _rollout(25.0, t_out=20.0), _rollout(27.0, t_out=20.0)  # 외기 20℃ 최적 ≈ 25℃
     assert b.average_pue < a.average_pue
     assert b.total_facility_energy_kwh > a.total_facility_energy_kwh
 
@@ -156,11 +208,15 @@ def test_ride_through_limits_high_load() -> None:
 
 
 def test_xfactor_rises_with_temperature() -> None:
-    assert _rollout(18.0).average_xfactor < _rollout(20.0).average_xfactor < _rollout(26.0).average_xfactor
+    assert (
+        _rollout(18.0).average_xfactor
+        < _rollout(20.0).average_xfactor
+        < _rollout(26.0).average_xfactor
+    )
 
 
 def test_capacity_limit_warns() -> None:
-    r = _rollout(20.0, it=4500.0, hours=3, capacity_factor=0.5)   # 2,500kW 한계 < 발열 4,500kW
+    r = _rollout(20.0, it=4500.0, hours=3, capacity_factor=0.5)  # 2,500kW 한계 < 발열 4,500kW
     assert r.capacity_limited_steps == 3
     assert max(r.heat_removed_kw) == pytest.approx(2500.0)
     assert any(w.startswith('cooling_capacity_limited') for w in r.warnings)
@@ -179,8 +235,14 @@ def test_batch_matches_single_rollout() -> None:
     batch = P.rollout_batch(it, t_out, plans, initial_room_temp_c=22.0)
     for j, plan in enumerate(plans):
         single = P.rollout(it, t_out, plan, initial_room_temp_c=22.0)
-        for key in ('total_facility_energy_kwh', 'total_cooling_energy_kwh', 'max_room_temp_c',
-                    'min_ride_through_min', 'average_xfactor', 'violation_steps'):
+        for key in (
+            'total_facility_energy_kwh',
+            'total_cooling_energy_kwh',
+            'max_room_temp_c',
+            'min_ride_through_min',
+            'average_xfactor',
+            'violation_steps',
+        ):
             assert batch[key][j] == pytest.approx(getattr(single, key)), key
 
 
@@ -193,6 +255,7 @@ def test_rollout_rejects_bad_input() -> None:
 
 # ---------------------------------------------------------------- API
 
+
 def test_health() -> None:
     r = client.get('/health')
     assert r.status_code == 200 and r.json()['service'] == 'twin'
@@ -204,10 +267,15 @@ def test_params() -> None:
 
 
 def test_api_simulate() -> None:
-    r = client.post('/api/v1/simulate', json={'points': [
-        {'it_power_kw': 3000, 'outdoor_temp_c': 25},
-        {'cpu_utilization': 0.25, 'outdoor_temp_c': 10},
-    ]})
+    r = client.post(
+        '/api/v1/simulate',
+        json={
+            'points': [
+                {'it_power_kw': 3000, 'outdoor_temp_c': 25},
+                {'cpu_utilization': 0.25, 'outdoor_temp_c': 10},
+            ]
+        },
+    )
     assert r.status_code == 200, r.text
     a, b = r.json()['results']
     assert a['cooling_mode'] == 'chiller' and a['cooling_power_kw'] == pytest.approx(3000 / 2.7)
@@ -220,8 +288,10 @@ def test_api_simulate_needs_load() -> None:
 
 
 def test_api_rollout() -> None:
-    r = client.post('/api/v1/rollout', json={
-        'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 24, 'supply_temp_c': [22] * 24})
+    r = client.post(
+        '/api/v1/rollout',
+        json={'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 24, 'supply_temp_c': [22] * 24},
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body['room_temp_c']) == 24
@@ -229,22 +299,36 @@ def test_api_rollout() -> None:
 
 
 def test_api_rollout_batch() -> None:
-    r = client.post('/api/v1/rollout/batch', json={
-        'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 24,
-        'plans': [[20] * 24, [26] * 24], 'initial_room_temp_c': 20})
+    r = client.post(
+        '/api/v1/rollout/batch',
+        json={
+            'it_power_kw': [3000] * 24,
+            'outdoor_temp_c': [22] * 24,
+            'plans': [[20] * 24, [26] * 24],
+            'initial_room_temp_c': 20,
+        },
+    )
     assert r.status_code == 200, r.text
     e = r.json()['total_facility_energy_kwh']
     assert len(e) == 2 and e[1] < e[0]
 
 
 def test_api_rollout_batch_length_mismatch_422() -> None:
-    r = client.post('/api/v1/rollout/batch', json={
-        'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 24,
-        'plans': [[20] * 23], 'initial_room_temp_c': 20})
+    r = client.post(
+        '/api/v1/rollout/batch',
+        json={
+            'it_power_kw': [3000] * 24,
+            'outdoor_temp_c': [22] * 24,
+            'plans': [[20] * 23],
+            'initial_room_temp_c': 20,
+        },
+    )
     assert r.status_code == 422
 
 
 def test_api_rollout_length_mismatch_422() -> None:
-    r = client.post('/api/v1/rollout', json={
-        'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 23, 'supply_temp_c': [22] * 24})
+    r = client.post(
+        '/api/v1/rollout',
+        json={'it_power_kw': [3000] * 24, 'outdoor_temp_c': [22] * 23, 'supply_temp_c': [22] * 24},
+    )
     assert r.status_code == 422

@@ -1,0 +1,375 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IDC Forecast Service",
+    "version": "0.4.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forecast": {
+      "post": {
+        "summary": "Forecast",
+        "operationId": "forecast_api_v1_forecast_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ForecastRequest": {
+        "properties": {
+          "horizon_hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Horizon Hours",
+            "description": "예측 기간(시간)",
+            "default": 24
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "it_load",
+              "cooling_load",
+              "cooling_power"
+            ],
+            "title": "Target",
+            "default": "it_load"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "lgbm",
+                  "ridge"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "IT 부하 예측 모델. 생략 시 config/settings.yaml 의 forecast.model (기본 ridge)"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HistoryPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History",
+            "description": "최근 이력 (timestamp, it_power_kw). 생략 시 서버 기본 데이터 사용"
+          },
+          "outdoor_forecast_c": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outdoor Forecast C",
+            "description": "target='cooling_power' 일 때 시간별 외기온도 예보 (horizon_hours 개)"
+          }
+        },
+        "type": "object",
+        "title": "ForecastRequest",
+        "description": "예측 요청.\n\nhistory 를 생략하면 서버가 가진 기본 데이터(data/synthetic_idc_90d.parquet)의\n마지막 시점을 예측 시점으로 쓴다. 넘길 때는 5분 또는 1시간 간격으로\n최소 168시간(5분 기준 2,016행) 이상이어야 한다.\n\ntarget\n  it_load        IT 부하 (kW)\n  cooling_load   냉각 부하(열량). 데이터상 IT 부하와 같아 같은 값을 돌려준다\n  cooling_power  냉각 전력(전기, kW) = IT 부하 예측 + 외기 → 트윈 물리 모델 (기준 설정 온도 운전)\n                 외기 예보(outdoor_forecast_c)를 생략하면 서버 데이터의 외기 실측값을 쓴다"
+      },
+      "ForecastResponse": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "horizon_hours": {
+            "type": "integer",
+            "title": "Horizon Hours"
+          },
+          "origin_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Origin Time"
+          },
+          "timestamps": {
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "predictions": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Predictions"
+          },
+          "pi_lower": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pi Lower"
+          },
+          "pi_upper": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pi Upper"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "kW"
+          },
+          "in_training_range": {
+            "type": "boolean",
+            "title": "In Training Range",
+            "default": true
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "it_predictions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Predictions"
+          },
+          "outdoor_temp_c": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outdoor Temp C"
+          },
+          "cooling_mode": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooling Mode"
+          },
+          "free_cooling_fraction": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Cooling Fraction"
+          },
+          "pue": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pue"
+          },
+          "outdoor_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outdoor Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "model",
+          "horizon_hours",
+          "origin_time",
+          "timestamps",
+          "predictions",
+          "pi_lower",
+          "pi_upper"
+        ],
+        "title": "ForecastResponse",
+        "description": "예측 결과 + 90% 예측구간 (CQR 보정 적용).\n\ntarget='cooling_power' 면 predictions/pi_* 는 냉각 전력(kW)이고, 아래 항목이 추가된다."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HistoryPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "it_power_kw": {
+            "type": "number",
+            "title": "It Power Kw"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "it_power_kw"
+        ],
+        "title": "HistoryPoint"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

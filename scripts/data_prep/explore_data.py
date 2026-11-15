@@ -19,7 +19,12 @@ df_sorted = df_sample.sort_values('timestamp')
 
 plt.figure(figsize=(12, 6))
 plt.subplot(2, 1, 1)
-plt.plot(df_sorted['timestamp'].head(500), df_sorted['it_power_kw'].head(500), label='IT Power (kW)', color='blue')
+plt.plot(
+    df_sorted['timestamp'].head(500),
+    df_sorted['it_power_kw'].head(500),
+    label='IT Power (kW)',
+    color='blue',
+)
 plt.title('IT Power & PUE Trend (Sample)')
 plt.ylabel('Power (kW)')
 plt.legend()

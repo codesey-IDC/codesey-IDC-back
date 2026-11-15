@@ -10,19 +10,21 @@ pyarrow>=26.0        # parquet 읽기/쓰기 (data/synthetic_idc_90d.parquet)
                      # ※ Windows 에서 pyarrow 17 + lightgbm 4.7 조합은 pandas 를 먼저 import 하면
                      #    lightgbm predict() 가 access violation 으로 죽는다 → 26 이상 고정
 
-# 예측 모델 (train_forecast.py)
+# 예측 모델 (scripts/train_forecast.py)
 lightgbm>=4.0        # 분위수 회귀
 scikit-learn>=1.3    # lightgbm의 LGBMRegressor가 내부적으로 필요
-optuna>=4.0          # 하이퍼파라미터 튜닝 (tune_forecast.py)
+scipy>=1.15          # MPC 최적화 (scipy.optimize.differential_evolution, vectorized·rng 인자)
+optuna>=4.0          # 하이퍼파라미터 튜닝 (scripts/tune_forecast.py)
 
 # 시각화
 plotly>=5.18         # 예측 결과 그래프, Streamlit 대시보드
 streamlit>=1.50      # 통합 관제 대시보드 (dashboard/app.py)
-matplotlib>=3.7      # 기존 explore_data.py
+matplotlib>=3.7      # 기존 scripts/data_prep/explore_data.py
 
 # 예측 API 서비스 (services/forecast)
 fastapi>=0.110
 uvicorn>=0.27
+pyyaml>=6.0         # config/settings.yaml 읽기
 
 # 테스트
 pytest>=8.0

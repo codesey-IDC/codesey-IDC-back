@@ -1,7 +1,7 @@
 """IT 부하 예측 모델 하이퍼파라미터 튜닝 (Optuna)
 
 흐름
-  1. train_forecast.py 와 같은 데이터·피처·분할을 쓴다 (Train / Val / Test)
+  1. scripts/train_forecast.py 와 같은 데이터·피처·분할을 쓴다 (Train / Val / Test)
   2. Optuna 로 q50(중앙값) 모델의 하이퍼파라미터를 탐색
        - 학습: Train 만 사용
        - 평가: Val MAPE  ← 조합 비교는 Val 로만 한다
@@ -13,15 +13,21 @@ Test 에 맞춘 셈이 되어 점수가 실제보다 좋게 나온다.
 
 운영 모델(output/forecast/models/)은 건드리지 않는다.
 결과는 output/forecast/tuning/ 에 저장되며, 채택하려면
-best_params.json 값을 train_forecast.py 의 LGB_PARAMS 에 옮기고 다시 학습한다.
+best_params.json 값을 scripts/train_forecast.py 의 LGB_PARAMS 에 옮기고 다시 학습한다.
 
 실행:
   pip install -r requirements.txt
-  python tune_forecast.py                  # 24h, 168h 각 30회 탐색
-  python tune_forecast.py --trials 50      # 탐색 횟수 변경
-  python tune_forecast.py --horizon 24h    # 한 모델만
+  python scripts/tune_forecast.py                  # 24h, 168h 각 30회 탐색
+  python scripts/tune_forecast.py --trials 50      # 탐색 횟수 변경
+  python scripts/tune_forecast.py --horizon 24h    # 한 모델만
 """
+
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # 저장소 루트 (services 패키지)
 
 import argparse
 import json
@@ -29,13 +35,21 @@ import os
 import time
 
 import lightgbm as lgb
-import numpy as np
 import optuna
 import pandas as pd
 
-from train_forecast import (
-    DATA_PATH, LGB_PARAMS, OUTPUT_DIR, QUANTILES, WEATHER_COLS,
-    USE_WEATHER_FEATURES, cqr_offset, evaluate, feature_columns, mape, split,
+from scripts.train_forecast import (
+    DATA_PATH,
+    LGB_PARAMS,
+    OUTPUT_DIR,
+    QUANTILES,
+    WEATHER_COLS,
+    USE_WEATHER_FEATURES,
+    cqr_offset,
+    evaluate,
+    feature_columns,
+    mape,
+    split,
 )
 from services.forecast.features import HORIZONS, build_direct_dataset, load_hourly
 
@@ -59,8 +73,9 @@ def suggest_params(trial: optuna.Trial) -> dict:
     )
 
 
-def fit_quantiles(train: pd.DataFrame, feats: list[str],
-                  params: dict) -> dict[float, lgb.LGBMRegressor]:
+def fit_quantiles(
+    train: pd.DataFrame, feats: list[str], params: dict
+) -> dict[float, lgb.LGBMRegressor]:
     models = {}
     for q in QUANTILES:
         model = lgb.LGBMRegressor(objective='quantile', alpha=q, **params)
@@ -69,8 +84,9 @@ def fit_quantiles(train: pd.DataFrame, feats: list[str],
     return models
 
 
-def tune(name: str, parts: dict[str, pd.DataFrame], feats: list[str],
-         n_trials: int) -> optuna.Study:
+def tune(
+    name: str, parts: dict[str, pd.DataFrame], feats: list[str], n_trials: int
+) -> optuna.Study:
     train, val = parts['train'], parts['val']
     y_val = val['y'].to_numpy()
 
@@ -81,15 +97,28 @@ def tune(name: str, parts: dict[str, pd.DataFrame], feats: list[str],
         return mape(y_val, model.predict(val[feats]))
 
     study = optuna.create_study(
-        study_name=f'it_load_{name}', direction='minimize',
-        sampler=optuna.samplers.TPESampler(seed=SEED))
+        study_name=f'it_load_{name}',
+        direction='minimize',
+        sampler=optuna.samplers.TPESampler(seed=SEED),
+    )
     # 기존 고정값을 첫 시도로 넣어서 "튜닝 전" 기준을 같은 조건으로 잰다
-    study.enqueue_trial({k: v for k, v in LGB_PARAMS.items()
-                         if k in ('n_estimators', 'learning_rate', 'num_leaves',
-                                  'min_child_samples', 'subsample', 'colsample_bytree')}
-                        | {'reg_lambda': 1e-3})
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False,
-                   callbacks=[_log_trial])
+    study.enqueue_trial(
+        {
+            k: v
+            for k, v in LGB_PARAMS.items()
+            if k
+            in (
+                'n_estimators',
+                'learning_rate',
+                'num_leaves',
+                'min_child_samples',
+                'subsample',
+                'colsample_bytree',
+            )
+        }
+        | {'reg_lambda': 1e-3}
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False, callbacks=[_log_trial])
     return study
 
 
@@ -98,9 +127,8 @@ def _log_trial(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
     print(f'   trial {trial.number:3d}  Val MAPE {trial.value:.4f}%{mark}')
 
 
-def final_eval(parts: dict[str, pd.DataFrame], feats: list[str],
-               params: dict, max_h: int) -> dict:
-    """3개 분위수 학습 → Val CQR → Test 1회 평가 (train_forecast.py 와 같은 절차)."""
+def final_eval(parts: dict[str, pd.DataFrame], feats: list[str], params: dict, max_h: int) -> dict:
+    """3개 분위수 학습 → Val CQR → Test 1회 평가 (scripts/train_forecast.py 와 같은 절차)."""
     models = fit_quantiles(parts['train'], feats, params)
     val_pred = {q: m.predict(parts['val'][feats]) for q, m in models.items()}
     offset = cqr_offset(val_pred[0.05], val_pred[0.95], parts['val']['y'].to_numpy())
@@ -127,18 +155,22 @@ def main() -> None:
     for name in names:
         max_h = HORIZONS[name]
         data = build_direct_dataset(
-            hourly, max_h, exog_cols=WEATHER_COLS if USE_WEATHER_FEATURES else None)
+            hourly, max_h, exog_cols=WEATHER_COLS if USE_WEATHER_FEATURES else None
+        )
         feats = feature_columns(data, max_h)
         parts = split(data)
 
         print(f'\n2. [{name}] Optuna 탐색 {args.trials}회 (Train 학습 → Val MAPE)...')
         start = time.time()
         study = tune(name, parts, feats, args.trials)
-        print(f'   소요 {time.time() - start:.0f}초, '
-              f'best trial {study.best_trial.number} Val MAPE {study.best_value:.4f}%')
+        print(
+            f'   소요 {time.time() - start:.0f}초, '
+            f'best trial {study.best_trial.number} Val MAPE {study.best_value:.4f}%'
+        )
 
         study.trials_dataframe().to_csv(
-            os.path.join(TUNING_DIR, f'trials_{name}.csv'), index=False)
+            os.path.join(TUNING_DIR, f'trials_{name}.csv'), index=False
+        )
         params = {**suggest_params(optuna.trial.FixedTrial(study.best_params))}
         best_params[name] = params
 
