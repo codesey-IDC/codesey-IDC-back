@@ -12,7 +12,7 @@
 모든 모듈 호출은 REST(FastAPI TestClient) 로 한다.
 
 가정
-  - 외기온도 예보는 실제값과 같다 (perfect forecast). 예보 오차는 반영하지 않음.
+  - 외기온도 예보는 실제값과 같다 (perfect forecast). 오차의 영향은 scripts/sensitivity_analysis.py 로 본다.
   - IT 부하는 MPC 가 forecast-service 예측값(q50)을 쓴다 (실제값을 모름).
   - 1시간 평균값으로 진행한다 (5분 변동 무시).
 
@@ -35,11 +35,15 @@ import json
 import os
 import time
 import warnings
+from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
+import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from services.common.settings import repo_path, section  # noqa: E402
@@ -55,9 +59,52 @@ TEST_START = pd.Timestamp(section('simulation')['test_start'])
 HISTORY_HOURS: int = section('simulation')['history_hours']
 
 
+@contextmanager
+def open_clients() -> Iterator[tuple[TestClient, TestClient]]:
+    """트윈·예측 서비스 TestClient 를 연결 하나로 열어 둔다.
+
+    with 없이 TestClient 를 쓰면 요청마다 이벤트 루프를 새로 만든다. Windows 에서는 그때마다
+    내부 소켓 쌍을 만드는데, 수만 번 반복하면(MPC 14일) 소켓 생성이 응답 없이 멈추는 일이 있었다.
+    """
+    with TestClient(twin_app) as twin, TestClient(forecast_app) as forecast:
+        yield twin, forecast
+
+
 def load_hourly() -> pd.DataFrame:
     raw = pd.read_parquet(DATA_PATH).set_index('timestamp')
     return raw[['it_power_kw', 'outdoor_temp_c']].resample('h').mean()
+
+
+class NoisyForecast:
+    """예측 서비스 응답에 일부러 오차를 섞는 대리 클라이언트 (민감도 분석용).
+
+    예측값 × (1 + bias + noise), noise ~ N(0, noise_pct%) 를 시간마다 따로 뽑는다.
+    오차 0 이면 예측 서비스 응답을 그대로 돌려준다.
+    """
+
+    def __init__(
+        self,
+        inner: TestClient,
+        noise_pct: float = 0.0,
+        bias_pct: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        self.inner, self.noise, self.bias = inner, noise_pct / 100, bias_pct / 100
+        self.rng = rng or np.random.default_rng(0)
+
+    def post(self, url: str, json: dict) -> httpx.Response:
+        r = self.inner.post(url, json=json)
+        if r.status_code != 200 or not (self.noise or self.bias):
+            return r
+        body = r.json()
+        pred = np.asarray(body['predictions'], dtype=float)
+        scale = (
+            1 + self.bias + self.rng.normal(0, self.noise, len(pred))
+            if self.noise
+            else 1 + self.bias
+        )
+        body['predictions'] = (pred * scale).tolist()
+        return httpx.Response(200, json=body, request=r.request)
 
 
 def run(
@@ -66,8 +113,17 @@ def run(
     hours: int,
     controller: str,
     twin: TestClient,
-    forecast: TestClient,
+    forecast: TestClient | NoisyForecast,
+    latency_h: int = 0,
+    outdoor_sigma_c: float = 0.0,
+    seed: int = 0,
 ) -> tuple[pd.DataFrame, dict]:
+    """controller 로 [start, start + hours) 를 1시간씩 진행한다.
+
+    latency_h: 제어 지연. k 시에 내린 결정이 k + latency_h 시에 적용된다 (그 전에는 직전 값 유지).
+    outdoor_sigma_c: MPC 에 주는 외기 예보에 N(0, σ) 오차를 시간마다 더한다 (실제 설비에는 실제값).
+    """
+    rng = np.random.default_rng(seed)
     params = twin.get('/api/v1/params').json()
     ref = params['supply_temp_ref_c']
     mpc = MPCController(twin, forecast, MPCConfig()) if controller == 'mpc' else None
@@ -80,6 +136,7 @@ def run(
     room, rows, fallbacks, naive = float(ref), [], 0, 0
     soc = float(params['tes_capacity_kwh'] * params['tes_initial_soc'])
     last_sp = float(ref)  # 직전에 적용한 설정 온도 (MPC 변화율 제약 기준)
+    pending: deque[tuple[float, float]] = deque()  # 아직 적용되지 않은 (설정 온도, 축열조) 결정
     for k in range(hours):
         now = start + pd.Timedelta(hours=k)
         actual = hourly.loc[now]
@@ -113,10 +170,16 @@ def run(
             ]
             outdoor = hourly.outdoor_temp_c.loc[now : now + pd.Timedelta(hours=23)].tolist()
             outdoor += [outdoor[-1]] * (24 - len(outdoor))  # 데이터 끝: 마지막 값 유지
+            if outdoor_sigma_c:
+                outdoor = (np.asarray(outdoor) + rng.normal(0, outdoor_sigma_c, 24)).tolist()
             plan = mpc.plan(room, history, outdoor, tes_soc_kwh=soc, current_setpoint_c=last_sp)
             sp, mode, tes_cmd = plan.setpoint_c, plan.mode, plan.tes_kw
             fallbacks += int(plan.mode == 'fallback')
             naive += int(plan.mode == 'mpc_naive')
+
+        # 제어 지연: 지금 결정은 latency_h 시간 뒤에 적용, 지금은 그만큼 전에 내린 결정을 적용
+        pending.append((sp, tes_cmd))
+        sp, tes_cmd = pending.popleft() if len(pending) > latency_h else (last_sp, 0.0)
 
         step = twin.post(
             '/api/v1/rollout',
@@ -192,15 +255,15 @@ def main() -> None:
         hourly.loc[surge, 'it_power_kw'] *= 1.3
     start, hours = pd.Timestamp(args.start), args.days * 24
 
-    twin, forecast = TestClient(twin_app), TestClient(forecast_app)
     os.makedirs(OUT_DIR, exist_ok=True)
     frames, summaries = [], {}
-    for name in args.controllers.split(','):
-        t0 = time.time()
-        df, s = run(hourly, start, hours, name, twin, forecast)
-        frames.append(df)
-        summaries[name] = s
-        print(f'{name:9s} 완료 ({time.time() - t0:.0f}초)')
+    with open_clients() as (twin, forecast):
+        for name in args.controllers.split(','):
+            t0 = time.time()
+            df, s = run(hourly, start, hours, name, twin, forecast)
+            frames.append(df)
+            summaries[name] = s
+            print(f'{name:9s} 완료 ({time.time() - t0:.0f}초)')
 
     first = next(iter(summaries.values()))
     base, rule = summaries.get('fixed_20', first), summaries.get(
