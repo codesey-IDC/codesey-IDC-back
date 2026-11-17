@@ -897,7 +897,9 @@ with tab_compare:
                 {
                     '제어기': CONTROLLER_LABELS[c],
                     '전체 전력량 (MWh)': m['facility_energy_kwh'] / 1000,
-                    '절감 (%)': m['saving_vs_fixed_20_pct'],
+                    '전력 절감 (%)': m['saving_vs_fixed_20_pct'],
+                    '전기요금 (만원)': m['energy_cost_krw'] / 1e4,
+                    '요금 절감 (%)': m['cost_saving_vs_rule_pid_pct'],
                     '냉각 전력량 (MWh)': m['cooling_energy_kwh'] / 1000,
                     '팬 증가분 (MWh)': m['fan_extra_energy_kwh'] / 1000,
                     '평균 PUE': m['average_pue'],
@@ -997,7 +999,11 @@ with tab_compare:
             hide_index=True,
             column_config={
                 '전체 전력량 (MWh)': st.column_config.NumberColumn(format='%.1f'),
-                '절감 (%)': st.column_config.NumberColumn(format='%.2f'),
+                '전력 절감 (%)': st.column_config.NumberColumn(format='%.2f'),
+                '전기요금 (만원)': st.column_config.NumberColumn(format='%.0f'),
+                '요금 절감 (%)': st.column_config.NumberColumn(
+                    format='%.2f', help='Rule-based PID 대비 전기요금 절감률'
+                ),
                 '냉각 전력량 (MWh)': st.column_config.NumberColumn(format='%.1f'),
                 '팬 증가분 (MWh)': st.column_config.NumberColumn(format='%.1f'),
                 '평균 PUE': st.column_config.NumberColumn(format='%.3f'),
