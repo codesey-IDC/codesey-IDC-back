@@ -11,6 +11,8 @@ output/forecast/models/ 의 model_config.json(공통: 학습 범위 등)과 모�
   - 피처 순서가 모델이 기억하는 순서와 다르면 AssertionError
   - 하한 <= 중앙값 <= 상한 이 깨지면 정렬
   - 입력/예측값이 학습 범위를 벗어나면 warnings 에 기록 (MPC 가 Fallback 판단)
+  - 학습 범위 안이라도 입력 이력이 고착·급변·평균 이동이면 warnings + input_quality_ok=False
+    (check_input_quality). 이런 입력은 범위 검사를 통과하지만 예측을 조용히 틀리게 만든다
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from services.common.settings import repo_path
+from services.common.settings import repo_path, section
 from services.forecast import ridge
 from services.forecast.features import (
     TARGET,
@@ -38,12 +40,82 @@ DEFAULT_MODEL_DIR = repo_path('forecast_models')  # config/settings.yaml 의 pat
 CONFIG_NAME = 'model_config.json'
 QUANTILE_KEYS = ('q05', 'q50', 'q95')
 KINDS = ('lgbm', 'ridge')
+_QUALITY: dict = section('forecast')['input_quality']  # 입력 이력 품질 검사 한계값
 
 
 def read_booster(path: Path) -> lgb.Booster:
     """모델 텍스트 파일을 읽는다. Windows git 이 CRLF 로 바꿔 놓아도 읽히게 LF 로 정규화."""
     text = path.read_text(encoding='utf-8').replace('\r\n', '\n')
     return lgb.Booster(model_str=text)
+
+
+@dataclass
+class InputCheck:
+    """입력 이력 품질 검사 한 항목."""
+
+    rule: str  # 'stuck' | 'jump' | 'level_shift'
+    label: str
+    ok: bool | None  # None = 이력이 짧아 검사하지 못함
+    measured: str  # 측정값 (사람이 읽는 글)
+    limit: str  # 기준
+
+
+def check_input_quality(hourly: pd.Series) -> list[InputCheck]:
+    """학습 범위 안에서 생기는 입력 이상을 찾는다 (범위 검사는 forecast() 가 따로 한다).
+
+    hourly: 1시간 간격 IT 부하. 마지막 MIN_HISTORY_HOURS 시간을 본다.
+      stuck        값이 멈춤 (센서 고착): 연속 N시간 표준편차가 거의 0
+      jump         1시간 사이 급변 (단발 스파이크·계단의 첫 순간)
+      level_shift  최근 평균이 1주 전 같은 시간대보다 크게 다름 (계단·점진 드리프트).
+                   1주 전 값이 필요해 이력이 MIN_HISTORY_HOURS + shift_window_hours 이상일 때만 검사한다.
+    한계값은 config/settings.yaml 의 forecast.input_quality.
+    """
+    q = _QUALITY
+    recent = hourly.iloc[-MIN_HISTORY_HOURS:]
+    window, std_limit = int(q['stuck_window_hours']), float(q['stuck_std_kw'])
+    flat = float(recent.rolling(window).std().min())
+    jump = float(recent.diff().abs().max())
+    checks = [
+        InputCheck(
+            'stuck',
+            '값 고착 (센서 멈춤)',
+            flat >= std_limit,
+            f'{window}시간 표준편차 최소 {flat:,.1f}kW',
+            f'{std_limit:,.1f}kW 이상',
+        ),
+        InputCheck(
+            'jump',
+            '1시간 사이 급변',
+            jump <= float(q['jump_limit_kw']),
+            f'1시간 변화 최대 {jump:,.0f}kW',
+            f'{float(q["jump_limit_kw"]):,.0f}kW 이하',
+        ),
+    ]
+    span, shift_limit = int(q['shift_window_hours']), float(q['shift_limit_kw'])
+    diff = (hourly - hourly.shift(MIN_HISTORY_HOURS)).iloc[-span:]
+    limit_text = f'±{shift_limit:,.0f}kW 이내'
+    if len(hourly) < MIN_HISTORY_HOURS + span or diff.isna().any():
+        checks.append(
+            InputCheck(
+                'level_shift',
+                '평균 이동·드리프트 (1주 전 대비)',
+                None,
+                f'이력이 {MIN_HISTORY_HOURS + span}시간보다 짧아 검사하지 못함',
+                limit_text,
+            )
+        )
+    else:
+        shift = float(diff.mean())
+        checks.append(
+            InputCheck(
+                'level_shift',
+                '평균 이동·드리프트 (1주 전 대비)',
+                abs(shift) <= shift_limit,
+                f'최근 {span}시간 평균이 1주 전보다 {shift:+,.0f}kW',
+                limit_text,
+            )
+        )
+    return checks
 
 
 @dataclass
@@ -56,6 +128,8 @@ class ForecastResult:
     pi_upper: list[float]  # q95 + offset
     warnings: list[str] = field(default_factory=list)
     in_training_range: bool = True
+    input_quality_ok: bool = True  # 입력 이력에 고착·급변·평균 이동이 없다
+    input_checks: list[InputCheck] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -176,6 +250,10 @@ class Predictor:
                 f'학습 범위를 벗어남'
             )
 
+        checks = check_input_quality(hourly)
+        failed = [c for c in checks if c.ok is False]
+        warnings += [f'input_{c.rule}: {c.label} — {c.measured} (기준 {c.limit})' for c in failed]
+
         return ForecastResult(
             model=key,
             origin_time=hourly.index[-1],
@@ -185,4 +263,6 @@ class Predictor:
             pi_upper=[round(float(v), 1) for v in hi],
             warnings=warnings,
             in_training_range=in_range,
+            input_quality_ok=not failed,
+            input_checks=checks,
         )

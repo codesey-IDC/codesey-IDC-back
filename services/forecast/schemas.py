@@ -54,6 +54,16 @@ class ForecastRequest(BaseModel):
         return self
 
 
+class InputCheckResult(BaseModel):
+    """입력 이력 품질 검사 한 항목 (config/settings.yaml 의 forecast.input_quality)."""
+
+    rule: str  # 'stuck'(값 고착) | 'jump'(1시간 급변) | 'level_shift'(1주 전 대비 평균 이동)
+    label: str
+    ok: bool | None  # None = 이력이 짧아 검사하지 못함
+    measured: str
+    limit: str
+
+
 class ForecastResponse(BaseModel):
     """예측 결과 + 90% 예측구간 (CQR 보정 적용).
 
@@ -70,6 +80,9 @@ class ForecastResponse(BaseModel):
     pi_upper: list[float]  # q95 + offset (kW)
     unit: str = 'kW'
     in_training_range: bool = True
+    # 학습 범위 안에서 생기는 입력 이상(고착·급변·평균 이동)이 없으면 true. false 면 MPC 가 예측을 믿지 않는다
+    input_quality_ok: bool = True
+    input_checks: list[InputCheckResult] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     # ---- target='cooling_power' 일 때만
     it_predictions: list[float] | None = None  # IT 부하 예측 (q50)

@@ -15,6 +15,7 @@ IT 부하(=냉각 부하) 24h / 168h 예측 + 90% 예측구간.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from functools import lru_cache
 
 import httpx
@@ -24,7 +25,7 @@ from fastapi import FastAPI, HTTPException
 from services.common.settings import repo_path, section, service_url
 from services.forecast.features import TARGET
 from services.forecast.predictor import KINDS, ForecastResult, Predictor
-from services.forecast.schemas import ForecastRequest, ForecastResponse
+from services.forecast.schemas import ForecastRequest, ForecastResponse, InputCheckResult
 
 DATA_PATH = repo_path('data')
 DEFAULT_MODEL: str = section('forecast')['model']  # 'ridge' | 'lgbm'
@@ -144,6 +145,8 @@ def forecast(req: ForecastRequest) -> ForecastResponse:
         origin_time=result.origin_time.to_pydatetime(),
         timestamps=[t.to_pydatetime() for t in result.timestamps],
         in_training_range=result.in_training_range,
+        input_quality_ok=result.input_quality_ok,
+        input_checks=[InputCheckResult(**asdict(c)) for c in result.input_checks],
         warnings=result.warnings,
         **values,
     )

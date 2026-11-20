@@ -137,7 +137,18 @@ curl -X POST :8001/api/v1/simulate -H 'Content-Type: application/json' \
 | `timestamps[]`, `predictions[]` | 앞으로 h 시간의 시각, 중앙값 예측 |
 | `pi_lower[]`, `pi_upper[]` | 90% 예측 구간 |
 | `in_training_range`, `warnings[]` | 학습 범위(2,389~3,457kW) 밖 입력·예측이면 `false` + 경고 → MPC 가 예측을 믿지 않는다 |
+| `input_quality_ok`, `input_checks[]` | 학습 범위 **안**에서 생기는 입력 이상 검사 (아래). 하나라도 걸리면 `false` + 경고 `input_{rule}: …` → MPC 가 예측을 믿지 않는다 |
 | `it_predictions[]`, `outdoor_temp_c[]`, `cooling_mode[]`, `free_cooling_fraction[]`, `pue[]`, `outdoor_source` | `cooling_power` 일 때만 |
+
+입력 품질 검사 (`input_checks[]`: `rule`, `label`, `ok`, `measured`, `limit`. 한계값은 `config/settings.yaml` 의 `forecast.input_quality`)
+| rule | 잡는 것 | 기준 (정상 데이터 최대·최소) |
+|---|---|---|
+| `stuck` | 값 고착 (센서 멈춤) | 6시간 표준편차 < 1.0kW (정상 최소 7.3kW) |
+| `jump` | 1시간 사이 급변 (범위 안 스파이크 포함) | 변화 > 300kW (정상 최대 191kW) |
+| `level_shift` | 계단·점진 드리프트 | 최근 24시간 평균이 1주 전 같은 시간대보다 ±80kW 초과 (정상 최대 29kW) |
+
+`level_shift` 는 1주 전 값이 필요해 **이력이 192시간 이상일 때만** 검사한다. 더 짧으면 `ok: null`(검사 못 함)이다.
+대시보드와 MPC 는 192시간을 보낸다. 범위 검사만 있을 때는 +10% 계단 입력이 그대로 통과해 예측이 약 8.6% 낮게 나왔다.
 
 오류: 이력 168시간 미만·최근 168시간에 빈 시간 → 422, 외기 개수 틀림 → 422, 예측 구간 외기 데이터 없음 → 422,
 모델 없음 → 503, twin-service 장애(`cooling_power`) → 503.
@@ -157,7 +168,15 @@ curl -X POST :8001/api/v1/simulate -H 'Content-Type: application/json' \
 ## 3. mpc-service (:8003) — 최적 냉각 제어
 
 ### `GET /health`
-`{"status": "ok", "service": "mpc", "forecast_url": "...", "twin_url": "..."}`
+`{"status": "ok", "service": "mpc", "forecast_url": "...", "twin_url": "...", "dependencies": {"forecast": "ok", "twin": "ok"}, "last_plan_mode": "mpc", "reasons": []}`
+
+프로세스가 살아 있으면 항상 200 이고, `status` 로 제어가 정상 경로로 돌 수 있는지를 구분한다.
+- `ok`: 예측·트윈이 응답하고, 직전 계획(`/plan`, `/control/*`)이 `mpc` 모드였거나 아직 계획한 적이 없다
+- `degraded`: 예측·트윈에 닿지 않거나(`dependencies` 가 `unreachable` \| `model_unavailable`), 직전 계획이 `mpc_naive`·`fallback` 이었다.
+  `reasons[]` 에 이유 (`forecast_unreachable`, `twin_unreachable`, `last_plan_mpc_naive`, `last_plan_fallback` 등)
+
+안전하게 물러나는 동작(mpc_naive, fallback)은 그대로이고, 물러났다는 사실을 밖에서 알 수 있게 한 것이다.
+폐루프 시뮬레이션(`/simulate`)은 제어기를 따로 만들어 쓰므로 이 상태에 영향을 주지 않는다.
 
 ### `POST /api/v1/control/optimize` — 최적 냉각 제어 (과제 결과물 3)
 현재 상태를 받아 앞으로 24시간 **시간대별 최적 냉각 설정값과 예상 PUE** 를 돌려준다.
@@ -177,7 +196,7 @@ curl -X POST :8001/api/v1/simulate -H 'Content-Type: application/json' \
 응답 (`ControlSchedule`)
 | 필드 | 설명 |
 |---|---|
-| `mode` | `mpc` 정상 / `mpc_naive` 예측 불신(최근 3시간 최대 부하 유지 가정) / `fallback` 트윈 장애 → 기준 20℃ |
+| `mode` | `mpc` 정상 / `mpc_naive` 예측 불신(학습 범위 밖 또는 입력 이력 이상 → 최근 3시간 최대 부하 유지 가정) / `fallback` 트윈 장애 → 기준 20℃ |
 | `method`, `objective` | `mpc`, `cost`(전기요금 최소화) |
 | `timestamps[]` | 24시간 |
 | `supply_temp_c[]` | **시간대별 최적 공급 공기 설정 온도** (시간당 ±2℃ 이내) |
@@ -211,7 +230,7 @@ curl -X POST :8003/api/v1/control/optimize -H 'Content-Type: application/json' \
 | `start` | datetime | 시작 시각 (데이터 시작 + 192시간 이후) |
 | `hours` | int (1~168), 기본 24 | 진행 시간 |
 | `controller` | `fixed_20` \| `rule_pid` \| `rule_tes` \| `reactive` \| `mpc` | 제어기 |
-| `scenario` | `normal` \| `server_surge` \| `chiller_failure` \| `heatwave` | 위기 시나리오 |
+| `scenario` | `GET /api/v1/scenarios` 의 `name` (`normal`, `server_surge`, `triple_crisis` 등 8종) | 위기 시나리오 |
 | `initial_room_temp_c` | float, 선택 | 시작 서버실 온도 |
 
 응답 (`SimulationJob`): `job_id`, `status`(`queued`|`running`|`done`|`failed`), `progress_hours`, `total_hours`,
@@ -227,7 +246,9 @@ curl -X POST :8003/api/v1/control/optimize -H 'Content-Type: application/json' \
 `summary`: `energy_cost_krw`, `facility_energy_kwh`, `cooling_energy_kwh`, `fan_extra_energy_kwh`, `it_energy_kwh`,
 `average_pue`, `average_xfactor`, `average_setpoint_c`, `max_room_temp_c`, `min_room_temp_c`,
 `temp_maintenance_pct`(18~27℃ 유지율), `temp_ok`(27℃ 이하), `min_ride_through_min`, `violation_hours`,
-`capacity_limited_hours`, `mode_hours{}`, `final_tes_soc_kwh`, `diverged`.
+`capacity_limited_hours`, `mode_hours{}`, `final_tes_soc_kwh`, `diverged`, `hours_to_critical`.
+서버실 온도가 위험 온도(32℃)에 닿으면 그 시각에서 멈춘다: `hours_to_critical` 에 시작부터 걸린 시간(아니면 null),
+`hours` 는 실제 진행한 시간, `warnings[]` 에 `critical_temp_reached: …`. 그 뒤는 서버 보호 정지 영역이라 계산하지 않는다.
 `timeseries{}`: 컬럼 → 시간별 값 (`timestamp`, `mode`, `setpoint_c`, `room_temp_c`, `it_power_kw`, `cooling_power_kw`,
 `facility_power_kw`, `pue`, `cooling_mode`, `tariff_period`, `price_krw_per_kwh`, `energy_cost_krw`, `tes_kw`, `tes_soc_kwh` 등).
 데이터 범위 밖 → 422, twin 장애 → 503.
@@ -241,6 +262,12 @@ curl -X POST :8003/api/v1/control/optimize -H 'Content-Type: application/json' \
 | `server_surge` | IT 부하 1.3배 |
 | `chiller_failure` | 칠러 4대 중 1대 탈락 (냉각 용량 75%) |
 | `heatwave` | 외기 최저 38℃ |
+| `heatwave_chiller` | 복합: 외기 최저 38℃ + 칠러 1대 탈락 |
+| `surge_heatwave` | 복합: IT 부하 1.3배 + 외기 최저 38℃ |
+| `triple_crisis` | 복합: IT 부하 1.3배 + 외기 최저 38℃ + 칠러 1대 탈락 |
+| `chiller_double_failure` | 칠러 4대 중 2대 탈락 (냉각 용량 50% < 발열). 위험 온도 도달 시 중단 |
+
+`config/settings.yaml` 의 `scenarios` 에 `it_scale`·`outdoor_min_c`·`failed_chillers` 를 함께 적으면 복합 위기가 된다.
 
 ### `GET /api/v1/results?scenario=base`
 `scripts/simulate_mpc.py` 로 미리 계산한 장기 비교 실험 (`output/mpc/metrics_{scenario}.json`, `timeseries_{scenario}.csv`).

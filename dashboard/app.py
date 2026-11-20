@@ -41,6 +41,7 @@ SERVICES = {'디지털 트윈': TWIN_URL, '예측': FORECAST_URL, 'MPC': MPC_URL
 HISTORY_HOURS: int = CONFIG['simulation']['history_hours']
 ROOM_MIN_C: float = CONFIG['datacenter']['room_temp_min_c']
 ROOM_MAX_C: float = CONFIG['datacenter']['room_temp_max_c']
+CRITICAL_C: float = CONFIG['datacenter']['critical_temp_c']
 DEFAULT_START = date(2026, 6, 4)
 
 CONTROLLER_LABELS = {
@@ -94,7 +95,22 @@ SCENARIO_COLORS = {
     'server_surge': C['blue'],
     'chiller_failure': C['orange'],
     'heatwave': C['aqua'],
+    'heatwave_chiller': C['purple'],
+    'surge_heatwave': '#c79a1e',
+    'triple_crisis': C['ink'],
+    'chiller_double_failure': C['critical'],
 }
+# 예측 입력에 일부러 넣어 보는 이상 (IT 부하 예측 탭). 알람이 실제로 뜨는지 확인하는 용도
+ANOMALY_LABELS = {
+    'none': '없음 (계측값 그대로)',
+    'stuck_48h': '센서 고착: 최근 48시간이 한 값으로 멈춤',
+    'step_10pct': '계단: 최근 72시간 +10%',
+    'drift_12pct': '드리프트: 168시간에 걸쳐 0 → +12%',
+    'spike_15pct': '범위 안 스파이크: 마지막 값 +15%',
+    'spike_50000': '범위 밖 스파이크: 마지막 값 50,000kW',
+    'gap_1h': '결측: 1시간 빠짐',
+}
+CHECK_MARK = {True: '✅ 정상', False: '🚨 이상', None: '➖ 검사 못 함'}
 
 
 # ---------------------------------------------------------------- REST 호출
@@ -164,13 +180,32 @@ def precomputed(scenario: str) -> dict:
     return _call('GET', f'{MPC_URL}/api/v1/results', params={'scenario': scenario})
 
 
-@st.cache_data(show_spinner=False)
-def forecast(start: str, horizon: int) -> dict:
-    """start 직전까지의 계측 이력으로 앞으로 horizon 시간을 예측."""
+def input_history(start: str, anomaly: str = 'none') -> pd.Series:
+    """start 직전 HISTORY_HOURS 시간의 IT 부하 (index = 시각). anomaly 를 주면 그 이상을 넣는다."""
     first = (pd.Timestamp(start) - pd.Timedelta(hours=HISTORY_HOURS)).isoformat()
     hist = telemetry(first, HISTORY_HOURS)
+    s = pd.Series(hist['it_power_kw'], index=pd.to_datetime(hist['timestamps']), dtype=float)
+    if anomaly == 'stuck_48h':
+        s.iloc[-48:] = s.iloc[-49]
+    elif anomaly == 'step_10pct':
+        s.iloc[-72:] *= 1.10
+    elif anomaly == 'drift_12pct':
+        s.iloc[-168:] *= [1 + 0.12 * k / 167 for k in range(168)]
+    elif anomaly == 'spike_15pct':
+        s.iloc[-1] *= 1.15
+    elif anomaly == 'spike_50000':
+        s.iloc[-1] = 50000.0
+    elif anomaly == 'gap_1h':
+        s = s.drop(s.index[-50])
+    return s
+
+
+@st.cache_data(show_spinner=False)
+def forecast(start: str, horizon: int, anomaly: str = 'none') -> dict:
+    """start 직전까지의 계측 이력으로 앞으로 horizon 시간을 예측."""
     history = [
-        {'timestamp': t, 'it_power_kw': v} for t, v in zip(hist['timestamps'], hist['it_power_kw'])
+        {'timestamp': t.isoformat(), 'it_power_kw': float(v)}
+        for t, v in input_history(start, anomaly).items()
     ]
     return _call(
         'POST',
@@ -396,6 +431,8 @@ with st.sidebar:
             st.markdown(f'❌ **{name}** 연결 안 됨  \n`{SERVICES[name]}`')
         elif h.get('model') == 'unavailable':
             st.markdown(f'⚠️ **{name}** 모델 파일 없음')
+        elif h.get('status') == 'degraded':
+            st.markdown(f'⚠️ **{name}** 저하  \n`{", ".join(h.get("reasons", []))}`')
         else:
             st.markdown(f'✅ **{name}** 정상')
 
@@ -460,16 +497,67 @@ with st.sidebar:
 START = datetime.combine(start_day, time(0)).isoformat()
 END = pd.Timestamp(START) + pd.Timedelta(hours=hours - 1)
 
-# 지금 보고 있는 조건 (위기 주입 중이면 색으로 구분)
+
+def system_status() -> tuple[str, list[str]]:
+    """실제 시스템 상태 ('정상' | '주의' | '경보')와 이유.
+
+    사이드바에서 고른 시나리오(시뮬레이션 조건)와는 별개로, 지금 서비스와 입력 데이터가 실제로 어떤지 본다:
+    서비스 응답, MPC 가 정상 경로로 돌 수 있는지(/health 의 degraded), 예측 입력 이력의 품질·학습 범위.
+    """
+    level, reasons = 0, []
+    mpc_health = status['MPC'] or {}
+    if status['예측'] and status['예측'].get('model') == 'unavailable':
+        level = 2
+        reasons.append('예측 모델 파일 없음')
+    if mpc_health.get('status') == 'degraded':
+        deps = mpc_health.get('dependencies', {})
+        down = [name for name, state in deps.items() if state != 'ok']
+        level = max(level, 2 if down else 1)
+        if down:
+            reasons.append('MPC 가 ' + '·'.join(down) + ' 서비스에 닿지 못함')
+        last = mpc_health.get('last_plan_mode')
+        if last not in (None, 'mpc'):
+            reasons.append(f'MPC 직전 계획이 {MPC_MODE_SHORT.get(last, last)} 모드')
+    try:
+        fc_now = forecast(START, 24)
+    except ApiError as e:
+        return '경보', reasons + [f'예측 불가: {e}']
+    if not fc_now['in_training_range']:
+        level = max(level, 2)
+        reasons.append('예측 입력·결과가 학습 범위 밖')
+    for check in fc_now.get('input_checks', []):
+        if check['ok'] is False:
+            level = max(level, 1)
+            reasons.append(f'입력 데이터 {check["label"]}')
+    return ['정상', '주의', '경보'][level], reasons
+
+
+# 실제 시스템 상태와, 지금 보고 있는 시뮬레이션 조건을 따로 보여준다 (위기 주입은 조건이지 실제 상태가 아니다)
+state, state_reasons = system_status()
+state_color, state_icon = {
+    '정상': ('green', '✅'),
+    '주의': ('orange', '⚠️'),
+    '경보': ('red', '🚨'),
+}[state]
 scenario_badge = (
-    ':green-badge[✅ 정상 운영]'
+    ':gray-badge[시뮬레이션 조건: 정상 운영]'
     if scenario == 'normal'
     else f':orange-badge[⚠️ 위기 주입: {SCENARIOS[scenario]["label"]}]'
 )
 st.markdown(
+    f':{state_color}-badge[{state_icon} 시스템 상태: {state}] '
     f':gray-badge[{pd.Timestamp(START):%Y-%m-%d %H:%M} ~ {END:%m-%d %H:%M} · {hours}시간] '
     f':blue-badge[제어기: {CONTROLLER_LABELS[controller]}] {scenario_badge}'
 )
+if state_reasons:
+    (st.error if state == '경보' else st.warning)(
+        f'{state_icon} 시스템 상태 {state}: ' + ' · '.join(state_reasons)
+    )
+else:
+    st.caption(
+        '시스템 상태: 서비스 3개 응답, MPC 정상 경로, 예측 입력 이력(고착·급변·평균 이동)과 '
+        '학습 범위 모두 정상. 위기 주입은 시뮬레이션 조건이라 이 상태에 들어가지 않습니다.'
+    )
 
 tab_monitor, tab_forecast, tab_plan, tab_compare, tab_crisis, tab_esg = st.tabs(
     ['관제', 'IT 부하 예측', 'MPC 계획', '제어기 비교', '위기 시나리오', 'ESG · 설정 온도']
@@ -481,7 +569,9 @@ tab_monitor, tab_forecast, tab_plan, tab_compare, tab_crisis, tab_esg = st.tabs(
 
 def monitor_live(sim: dict, base: dict, playing: bool) -> None:
     """시각 슬라이더에 따라 바뀌는 부분. 자동 재생 중에는 이 부분만 주기적으로 다시 그린다."""
-    df, bdf = frame(sim), frame(base)
+    df = frame(sim)
+    # 20℃ 고정이 위험 온도에 닿아 먼저 멈췄으면 그 뒤 시각은 비교값이 없다 (NaN)
+    bdf = frame(base).set_index('timestamp').reindex(df.timestamp).reset_index()
     n = len(df)
     key = f'cursor|{START}|{hours}|{controller}|{scenario}'
     if key not in st.session_state:
@@ -506,7 +596,7 @@ def monitor_live(sim: dict, base: dict, playing: bool) -> None:
         st.rerun()
     now = df.iloc[i]
 
-    compare = controller != 'fixed_20'
+    compare = controller != 'fixed_20' and pd.notna(bdf.pue[i])
     c_gauge, c_now = st.columns([1, 3], vertical_alignment='center')
     with c_gauge:
         show(pue_gauge(float(now.pue), float(bdf.pue[i]) if compare else None), 'gauge')
@@ -604,7 +694,13 @@ with tab_monitor:
 
     if sim:
         s, df = sim['summary'], frame(sim)
-        if s['diverged'] or not s['temp_ok']:
+        if s.get('hours_to_critical'):
+            st.error(
+                f'🚨 경보: 시작 {s["hours_to_critical"]}시간 만에 서버실 온도가 위험 온도 '
+                f'{CRITICAL_C:.0f}℃ 에 도달해 시뮬레이션을 멈췄습니다 (최고 {s["max_room_temp_c"]:.1f}℃). '
+                '냉각 용량이 발열보다 작아 설정 온도 조정으로는 막을 수 없는 상황입니다.'
+            )
+        elif s['diverged'] or not s['temp_ok']:
             st.error(
                 f'⚠️ 경고: 서버실 온도가 {ROOM_MAX_C:.0f}℃ 를 넘었습니다 (최고 {s["max_room_temp_c"]:.1f}℃).'
             )
@@ -618,9 +714,27 @@ with tab_monitor:
                 f'✅ 서버실 온도 정상 (전 구간 {ROOM_MIN_C:.0f}~{ROOM_MAX_C:.0f}℃, 위반 없음)'
             )
         for w in sim['warnings']:
-            st.warning(w)
+            if not w.startswith('critical_temp_reached'):  # 위 경보와 같은 내용
+                st.warning(w)
+        degraded_hours = {m: n for m, n in s['mode_hours'].items() if m in MPC_MODE_LABELS}
+        degraded_hours.pop('mpc', None)
+        if degraded_hours:
+            st.warning(
+                '⚠️ MPC 가 정상 경로에서 물러나 운전한 시간이 있습니다: '
+                + ' · '.join(f'{MPC_MODE_LABELS[m]} {n}시간' for m, n in degraded_hours.items())
+            )
+        if len(df) < hours or len(frame(base)) < len(df):
+            st.caption(
+                f'시뮬레이션이 {len(df)}시간에서 멈췄습니다. 아래 지표는 멈출 때까지의 값이고, '
+                '20℃ 고정 대비 비교는 두 운전이 모두 진행한 시간만 봅니다.'
+            )
 
-        saving = (1 - s['facility_energy_kwh'] / base['summary']['facility_energy_kwh']) * 100
+        common = min(len(df), len(base['timeseries']['facility_power_kw']))
+        saving = (
+            1
+            - df.facility_power_kw.iloc[:common].sum()
+            / sum(base['timeseries']['facility_power_kw'][:common])
+        ) * 100
         k = st.columns(5)
         k[0].metric(
             '평균 PUE',
@@ -684,16 +798,28 @@ with tab_monitor:
 # ---------------------------------------------------------------- IT 부하 예측
 
 with tab_forecast:
-    horizon = st.radio('예측 기간', [24, 168], format_func=lambda h: f'{h}시간', horizontal=True)
+    c_horizon, c_anomaly = st.columns([1, 2])
+    horizon = c_horizon.radio(
+        '예측 기간', [24, 168], format_func=lambda h: f'{h}시간', horizontal=True
+    )
+    anomaly = c_anomaly.selectbox(
+        '입력 데이터 이상 주입 (알람 확인용)',
+        list(ANOMALY_LABELS),
+        format_func=ANOMALY_LABELS.get,
+        help='예측에 넣는 최근 이력에 일부러 이상을 넣어, 예측 서비스가 알람을 내는지 확인합니다. '
+        '이 탭의 예측에만 적용되고 관제·시스템 상태에는 들어가지 않습니다.',
+    )
     try:
-        fc = forecast(START, horizon)
-        past = telemetry((pd.Timestamp(START) - pd.Timedelta(hours=72)).isoformat(), 72)
+        past = input_history(START, anomaly).iloc[-72:]
+        fc = forecast(START, horizon, anomaly)
         try:
             actual = telemetry(START, horizon)
         except ApiError:
             actual = None
     except ApiError as e:
-        st.error(str(e))
+        st.error(
+            f'🚨 예측 거부: {e}' if anomaly != 'none' else str(e)
+        )  # 결측 등은 서비스가 예측을 거부한다 (422)
         fc = None
 
     if fc:
@@ -701,14 +827,49 @@ with tab_forecast:
         pred = pd.Series(fc['predictions'], index=t)
         st.caption(
             f'예측 시점 {pd.Timestamp(fc["origin_time"]):%Y-%m-%d %H:%M} · 모델 {fc["model"]} · '
-            '정상 조건의 계측 이력 기준 (위기 시나리오 미적용)'
-        )
-        if not fc['in_training_range']:
-            st.warning(
-                '⚠️ 입력 또는 예측값이 학습 범위를 벗어났습니다. MPC 는 이 경우 예측을 쓰지 않습니다.'
+            + (
+                '정상 조건의 계측 이력 기준 (위기 시나리오 미적용)'
+                if anomaly == 'none'
+                else f'이상 주입: {ANOMALY_LABELS[anomaly]}'
             )
+        )
+        checks = fc.get('input_checks', [])
+        quality_ok = fc.get('input_quality_ok', True)
+        if not fc['in_training_range']:
+            st.error(
+                '🚨 알람: 입력 또는 예측값이 학습 범위를 벗어났습니다. MPC 는 이 경우 예측을 쓰지 않습니다.'
+            )
+        elif not quality_ok:
+            st.error(
+                '🚨 알람: 값은 학습 범위 안이지만 입력 이력에 이상이 있습니다 ('
+                + ', '.join(c['label'] for c in checks if c['ok'] is False)
+                + '). MPC 는 이 경우 예측을 쓰지 않고 최근 최대 부하를 가정합니다.'
+            )
+        elif anomaly != 'none':
+            st.warning('⚠️ 주입한 이상을 감지하지 못했습니다 (알람 없음).')
         for w in fc['warnings']:
             st.caption(f'경고: {w}')
+        if checks:
+            with st.expander('입력 데이터 품질 검사', expanded=not quality_ok):
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                '검사': c['label'],
+                                '판정': CHECK_MARK[c['ok']],
+                                '측정값': c['measured'],
+                                '기준': c['limit'],
+                            }
+                            for c in checks
+                        ]
+                    ),
+                    width='stretch',
+                    hide_index=True,
+                )
+                st.caption(
+                    '학습 범위 검사만으로는 잡히지 않는 이상을 봅니다. 기준은 학습 구간의 정상 변동보다 넉넉히 크게 '
+                    '잡은 값입니다 (config/settings.yaml 의 forecast.input_quality).'
+                )
 
         cols = st.columns(4)
         cols[0].metric('예측 평균', f'{pred.mean():,.0f} kW', border=True)
@@ -754,9 +915,9 @@ with tab_forecast:
             hoverinfo='skip',
         )
         fig.add_scatter(
-            x=pd.to_datetime(past['timestamps']),
-            y=past['it_power_kw'],
-            name='계측 (과거)',
+            x=past.index,
+            y=past.values,
+            name='계측 (과거)' if anomaly == 'none' else '입력 이력 (이상 주입)',
             line=dict(color=C['muted'], width=2),
             hovertemplate='%{y:,.0f} kW',
         )
@@ -816,8 +977,11 @@ with tab_plan:
         )
         energy_mwh = plan['expected_facility_energy_kwh'] / 1000
         cols[2].metric('24시간 예상 전력량', f'{energy_mwh:,.1f} MWh', border=True)
+        saving_pct = plan.get('expected_saving_pct')
         cols[3].metric(
-            '예상 절감 (20℃ 고정 대비)', f'{plan["expected_saving_pct"]:.1f}%', border=True
+            '예상 절감 (20℃ 고정 대비)',
+            '계산 불가' if saving_pct is None else f'{saving_pct:.1f}%',
+            border=True,
         )
         if plan['mode'] == 'fallback':
             st.error('⚠️ 트윈을 쓸 수 없어 기준 설정 20℃ 로 돌아갔습니다.')
@@ -1022,64 +1186,129 @@ with tab_compare:
 # ---------------------------------------------------------------- 위기 시나리오
 
 with tab_crisis:
+    crisis_names = [n for n in SCENARIOS if n != 'normal']
+    picked = st.multiselect(
+        '시뮬레이션할 위기 시나리오',
+        crisis_names,
+        default=crisis_names,
+        format_func=lambda n: SCENARIOS[n]['label'],
+        help='단일 위기 3종과, 위기가 겹치는 복합 시나리오입니다 (config/settings.yaml 의 scenarios).',
+    )
     c_text, c_button = st.columns([3, 1], vertical_alignment='center')
     c_text.write(
-        f'시나리오 3종을 **{CONTROLLER_LABELS[controller]}** 제어로 {hours}시간 시뮬레이션하고 '
-        '정상 운영과 비교합니다.'
+        f'고른 시나리오 {len(picked)}종을 **{CONTROLLER_LABELS[controller]}** 제어로 {hours}시간 '
+        '시뮬레이션하고 정상 운영과 한 그래프에 겹쳐 비교합니다.'
     )
-    if c_button.button('위기 3종 시뮬레이션 실행', type='primary', width='stretch'):
-        st.session_state['crisis'] = (START, hours, controller)
+    if c_button.button(
+        '위기 시나리오 시뮬레이션 실행', type='primary', width='stretch', disabled=not picked
+    ):
+        st.session_state['crisis'] = (START, hours, controller, tuple(picked))
 
-    if st.session_state.get('crisis') == (START, hours, controller):
+    if st.session_state.get('crisis') == (START, hours, controller, tuple(picked)):
+        # 시나리오 하나가 실패해도 나머지 결과는 남긴다
         runs: dict[str, dict] = {}
-        try:
-            progress = st.progress(0.0, text='시뮬레이션 중…')
-            for idx, name in enumerate(SCENARIOS):
-                progress.progress(
-                    idx / len(SCENARIOS), text=f'{SCENARIOS[name]["label"]} 계산 중…'
-                )
+        failed: dict[str, str] = {}
+        todo = ['normal'] + picked
+        progress = st.progress(0.0, text='시뮬레이션 중…')
+        for idx, name in enumerate(todo):
+            progress.progress(
+                idx / len(todo),
+                text=f'{SCENARIOS[name]["label"]} 계산 중… ({idx + 1}/{len(todo)})',
+            )
+            try:
                 runs[name] = simulate(START, hours, controller, name)
-            progress.empty()
-        except ApiError as e:
-            st.error(str(e))
-            runs = {}
+            except ApiError as e:
+                failed[name] = str(e)
+        progress.empty()
 
-        if runs:
-            normal = runs['normal']['summary']
-            crisis = {n: r for n, r in runs.items() if n != 'normal'}
-            if all(
-                r['summary']['temp_ok'] and not r['summary']['diverged'] for r in crisis.values()
-            ):
-                st.success(f'✅ 모든 위기 시나리오에서 서버실 온도 {ROOM_MAX_C:.0f}℃ 이하 유지')
-            else:
-                st.error(f'⚠️ 일부 시나리오에서 서버실 온도가 {ROOM_MAX_C:.0f}℃ 를 넘었습니다')
+        crisis = {n: r for n, r in runs.items() if n != 'normal'}
+        normal = runs['normal']['summary'] if 'normal' in runs else None
+        stopped = [n for n, r in crisis.items() if r['summary'].get('hours_to_critical')]
+        over = [
+            n
+            for n, r in crisis.items()
+            if n not in stopped and (r['summary']['diverged'] or not r['summary']['temp_ok'])
+        ]
+        if failed:
+            st.error(
+                '🚨 계산하지 못한 시나리오: '
+                + ' · '.join(SCENARIOS[n]['label'].split(' (')[0] for n in failed)
+            )
+        if stopped:
+            st.error(
+                f'🚨 위험 온도 {CRITICAL_C:.0f}℃ 도달: '
+                + ' · '.join(
+                    f'{SCENARIOS[n]["label"].split(" (")[0]} '
+                    f'({crisis[n]["summary"]["hours_to_critical"]}시간 만에)'
+                    for n in stopped
+                )
+            )
+        if over:
+            st.error(
+                f'⚠️ 서버실 온도 {ROOM_MAX_C:.0f}℃ 초과: '
+                + ' · '.join(SCENARIOS[n]['label'].split(' (')[0] for n in over)
+            )
+        if crisis and not (failed or stopped or over):
+            st.success(f'✅ 모든 위기 시나리오에서 서버실 온도 {ROOM_MAX_C:.0f}℃ 이하 유지')
 
-            for col, (name, r) in zip(st.columns(len(crisis)), crisis.items()):
-                s = r['summary']
+        cards = list(crisis.items()) + [(n, None) for n in failed]
+        for row_start in range(0, len(cards), 4):
+            row = cards[row_start : row_start + 4]
+            for col, (name, r) in zip(st.columns(4), row):
                 with col.container(border=True, height='stretch'):
-                    st.markdown(f'**{r["scenario_label"]}**')
-                    st.metric(
-                        '최고 서버실 온도',
-                        f'{s["max_room_temp_c"]:.1f}℃',
-                        delta=f'{ROOM_MAX_C:.0f}℃ ' + ('이하' if s['temp_ok'] else '초과'),
-                        delta_arrow='off',
-                        delta_color='normal' if s['temp_ok'] else 'inverse',
-                    )
-                    a, b, c = st.columns(3)
-                    small_stat(a, '평균 PUE', f'{s["average_pue"]:.3f}')
-                    small_stat(
-                        b,
-                        '전력량 증가',
-                        '{:+.1f}%'.format(
-                            (s['facility_energy_kwh'] / normal['facility_energy_kwh'] - 1) * 100
-                        ),
-                    )
-                    small_stat(c, '온도 유지율', f'{s["temp_maintenance_pct"]:.0f}%')
-                    if s['violation_hours']:
-                        st.warning(
-                            f'비상 여유 시간 부족 {s["violation_hours"]}시간 '
-                            f'(최소 {s["min_ride_through_min"]:.1f}분)'
+                    st.markdown(f'**{SCENARIOS[name]["label"]}**')
+                    if r is None:
+                        st.error('계산 못 함')
+                        st.caption(failed[name])
+                        continue
+                    s = r['summary']
+                    to_critical = s.get('hours_to_critical')
+                    if to_critical:
+                        st.metric(
+                            '위험 온도 도달까지',
+                            f'{to_critical}시간',
+                            delta=f'{CRITICAL_C:.0f}℃ 도달 (최고 {s["max_room_temp_c"]:.1f}℃)',
+                            delta_arrow='off',
+                            delta_color='inverse',
                         )
+                        over_hours = int(
+                            (pd.Series(r['timeseries']['room_temp_c']) > ROOM_MAX_C).sum()
+                        )
+                        a, b = st.columns(2)
+                        small_stat(
+                            a,
+                            f'{ROOM_MAX_C:.0f}℃ 이하로 버틴 시간',
+                            f'{s["hours"] - over_hours}시간',
+                        )
+                        small_stat(b, '용량 한계 운전', f'{s["capacity_limited_hours"]}시간')
+                    else:
+                        st.metric(
+                            '최고 서버실 온도',
+                            f'{s["max_room_temp_c"]:.1f}℃',
+                            delta=f'{ROOM_MAX_C:.0f}℃ ' + ('이하' if s['temp_ok'] else '초과'),
+                            delta_arrow='off',
+                            delta_color='normal' if s['temp_ok'] else 'inverse',
+                        )
+                        a, b, c = st.columns(3)
+                        small_stat(a, '평균 PUE', f'{s["average_pue"]:.3f}')
+                        small_stat(
+                            b,
+                            '전력량 증가',
+                            (
+                                '-'
+                                if normal is None or normal['hours'] != s['hours']
+                                else '{:+.1f}%'.format(
+                                    (s['facility_energy_kwh'] / normal['facility_energy_kwh'] - 1)
+                                    * 100
+                                )
+                            ),
+                        )
+                        small_stat(c, '온도 유지율', f'{s["temp_maintenance_pct"]:.0f}%')
+                        if s['violation_hours']:
+                            st.warning(
+                                f'비상 여유 시간 부족 {s["violation_hours"]}시간 '
+                                f'(최소 {s["min_ride_through_min"]:.1f}분)'
+                            )
                     mode_note = ''
                     if controller == 'mpc':
                         mode_note = ' · 모드: ' + ', '.join(
@@ -1088,44 +1317,65 @@ with tab_crisis:
                         )
                     st.caption(f'대응: {r["strategy"]}{mode_note}')
 
+        if runs:
             frames = {name: frame(r) for name, r in runs.items()}
-            c1, c2 = st.columns(2)
-            with c1:
-                st.subheader('서버실 온도')
-                fig = go.Figure()
-                for name, d in frames.items():
-                    fig.add_scatter(
-                        x=d.timestamp,
-                        y=d.room_temp_c,
-                        name=SCENARIOS[name]['label'].split(' (')[0],
-                        line=dict(
-                            color=SCENARIO_COLORS[name],
-                            width=2,
-                            dash='dot' if name == 'normal' else 'solid',
-                        ),
-                        hovertemplate='%{y:.1f}℃',
-                    )
-                room_limits(fig, *room_range(*[d.room_temp_c for d in frames.values()]))
-                show(styled(fig, 300, '℃'), 'crisis_temp')
-            with c2:
-                st.subheader('전체 전력')
-                fig = go.Figure()
-                for name, d in frames.items():
-                    fig.add_scatter(
-                        x=d.timestamp,
-                        y=d.facility_power_kw,
-                        name=SCENARIOS[name]['label'].split(' (')[0],
-                        line=dict(
-                            color=SCENARIO_COLORS[name],
-                            width=2,
-                            dash='dot' if name == 'normal' else 'solid',
-                        ),
-                        hovertemplate='%{y:,.0f} kW',
-                    )
-                show(styled(fig, 300, 'kW'), 'crisis_power')
+            panels = (
+                ('서버실 온도', 'room_temp_c', '%{y:.1f}℃', '℃', 'crisis_temp'),
+                ('전체 전력', 'facility_power_kw', '%{y:,.0f} kW', 'kW', 'crisis_power'),
+            )
+            for col, (title, column, hover, unit, key) in zip(st.columns(2), panels):
+                with col:
+                    st.subheader(title)
+                    fig = go.Figure()
+                    for name, d in frames.items():
+                        short = SCENARIOS[name]['label'].split(' (')[0]
+                        fig.add_scatter(
+                            x=d.timestamp,
+                            y=d[column],
+                            name=short,
+                            mode='lines',
+                            line=dict(
+                                color=SCENARIO_COLORS.get(name, C['muted']),
+                                width=2,
+                                dash='dot' if name == 'normal' else 'solid',
+                            ),
+                            hovertemplate=hover,
+                        )
+                        if name in stopped:  # 위험 온도에 닿아 멈춘 지점
+                            fig.add_scatter(
+                                x=[d.timestamp.iloc[-1]],
+                                y=[d[column].iloc[-1]],
+                                mode='markers',
+                                marker=dict(
+                                    symbol='x',
+                                    size=10,
+                                    color=SCENARIO_COLORS.get(name, C['muted']),
+                                ),
+                                name=f'{short} 중단',
+                                showlegend=False,
+                                hovertemplate=f'{short}: 위험 온도 도달로 중단<extra></extra>',
+                            )
+                    if column == 'room_temp_c':
+                        room_limits(fig, *room_range(*[d.room_temp_c for d in frames.values()]))
+                        if stopped:
+                            fig.add_hline(
+                                y=CRITICAL_C,
+                                line_dash='dash',
+                                line_color=C['critical'],
+                                line_width=1,
+                                annotation_text=f'위험 {CRITICAL_C:.0f}℃',
+                                annotation_position='top left',
+                            )
+                    show(styled(fig, 340, unit), key)
+            st.caption(
+                '그래프에 마우스를 올리면 그 시각의 시나리오별 값이 함께 보입니다 (휴대폰에서는 그래프를 누르세요). '
+                '× 표시는 서버실 온도가 위험 온도에 닿아 시뮬레이션을 멈춘 지점입니다.'
+            )
     else:
         st.info(
-            '버튼을 누르면 서버 급증(+30%) · 칠러 고장(냉각 용량 75%) · 폭염(외기 38℃ 이상)을 차례로 계산합니다.'
+            '버튼을 누르면 단일 위기(서버 급증 +30% · 칠러 1대 고장 · 폭염 38℃ 이상)와 '
+            '복합 위기(폭염 + 칠러 고장 · 급증 + 폭염 · 세 위기 동시 · 칠러 2대 고장)를 차례로 계산합니다. '
+            'MPC 는 시나리오 하나에 수십 초가 걸립니다.'
         )
 
 
@@ -1144,7 +1394,10 @@ with tab_esg:
                 f'관제 탭과 같은 구간 · {CONTROLLER_LABELS[controller]} · {sim["scenario_label"]}. '
                 '변화량은 20℃ 고정 대비입니다.'
             )
-            compare = controller != 'fixed_20'
+            same_span = sim['summary']['hours'] == base['summary']['hours']
+            compare = controller != 'fixed_20' and same_span
+            if not same_span:
+                st.caption('두 운전이 멈춘 시각이 달라 20℃ 고정 대비 변화량은 표시하지 않습니다.')
             cols = st.columns(4)
             cols[0].metric(
                 '탄소 배출 (tCO2)',

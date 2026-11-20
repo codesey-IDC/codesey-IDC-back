@@ -23,7 +23,7 @@
         정상 상태(서버실 = 설정 온도)에서는 Q = 발열.
     - 설정 온도를 올릴 때의 단점
         ① 서버 팬 전력: 서버실이 fan_threshold_c 를 넘으면 IT 전력이 (T - 기준)² 비율로 증가.
-           늘어난 전력도 열이 되어 냉각 부하에 더해진다.
+           늘어난 전력도 열이 되어 냉각 부하에 더해진다. critical_temp_c 에서 최고 속도(상한).
         ② 비상 여유 시간: 냉각이 멈췄을 때 critical_temp_c 에 닿기까지 걸리는 시간.
            min_ride_through_min 미만이면 위반.
         ③ 상대 고장률 (ASHRAE x-factor, 20℃ = 1.0): 지표로만 보고, 비용에는 넣지 않는다.
@@ -132,8 +132,17 @@ def it_power_from_cpu(cpu_utilization: ArrayLike, p: TwinParams = DEFAULT_PARAMS
 
 
 def fan_extra_ratio(room_temp_c: ArrayLike, p: TwinParams = DEFAULT_PARAMS) -> np.ndarray:
-    """서버실 온도에 따른 IT 전력 증가 비율 (팬·누설 전력)."""
-    over = np.maximum(np.asarray(room_temp_c, dtype=float) - p.fan_threshold_c, 0.0)
+    """서버실 온도에 따른 IT 전력 증가 비율 (팬·누설 전력).
+
+    팬은 위험 온도(critical_temp_c)에서 최고 속도에 닿는다고 보고 그 위로는 더 늘지 않는다.
+    상한이 없으면 냉각 용량이 발열보다 작을 때 "온도 상승 → 팬 전력 증가 → 발열 증가"가
+    끝없이 되먹임되어 서버실 온도가 수만 ℃ 로 발산한다 (칠러 2대 탈락 시나리오).
+    """
+    over = np.clip(
+        np.asarray(room_temp_c, dtype=float) - p.fan_threshold_c,
+        0.0,
+        max(p.critical_temp_c - p.fan_threshold_c, 0.0),
+    )
     return p.fan_power_coef_per_c2 * over**2
 
 
@@ -584,6 +593,13 @@ def rollout(
         warnings.append(
             f'cooling_capacity_limited: {out.capacity_limited_steps}개 구간에서 냉각 용량 '
             f'{p.cooling_capacity_kw * capacity_factor:.0f}kW 한계 도달'
+        )
+    critical_steps = int((r['room_temp_c'] >= p.critical_temp_c).sum())
+    if critical_steps:
+        warnings.append(
+            f'critical_temp_reached: {critical_steps}개 구간에서 서버실 온도가 위험 온도 '
+            f'{p.critical_temp_c:.0f}℃ 이상 (최고 {out.max_room_temp_c:.1f}℃). '
+            f'실제로는 서버가 보호 정지하는 영역이라 이후 값은 참고용'
         )
     out.warnings = warnings
     return out

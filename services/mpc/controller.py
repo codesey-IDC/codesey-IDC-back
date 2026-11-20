@@ -25,13 +25,19 @@ MPC 5요소
   초기 세대에 기준 온도·일정 온도·축열 시간표·직전 해를 넣어 그보다 나쁜 답이 나오지 않게 한다.
 
 예측을 믿을 수 없을 때 (mode = 'mpc_naive')
-  예측 서비스 호출 실패, 또는 in_training_range=false (학습 범위 밖 부하).
+  예측 서비스 호출 실패, in_training_range=false (학습 범위 밖 부하),
+  또는 input_quality_ok=false (학습 범위 안이지만 입력 이력이 고착·급변·평균 이동).
   믿을 수 없는 건 예측 모델이지 트윈의 물리 계산이 아니므로, "최근 3시간 최대 부하가
   계속된다"는 보수적 가정으로 바꿔 계속 최적화한다.
 
 Fallback (mode = 'fallback', 기준 설정 온도 고정)
   트윈 서비스 호출 실패 — 계획을 평가할 수 없으므로 원본 데이터에서 검증된 기준 설정으로 돌아간다.
-  어떤 계획으로도 서버실 온도가 발산하는 경우(냉각 용량 < 발열)도 같다. 설정 온도로 해결할 수 없는 상황이다.
+  트윈이 모든 후보 계획을 계산하지 못하는 경우(수치 발산)도 같다.
+
+냉각 용량 < 발열 (예: 칠러 2대 탈락)
+  트윈의 팬 전력 상한 덕분에 온도가 발산하지 않고 유한하게 오른다. 이때는 Fallback 하지 않고
+  계속 최적화한다: 위반 벌점이 "위반 구간 수"라서 축열조를 방전해 온도 상승을 최대한 늦추는 계획이 뽑힌다.
+  계획 구간 안에 위험 온도에 닿으면 경고 twin.critical_temp_reached 가 붙는다.
 """
 
 from __future__ import annotations
@@ -103,8 +109,8 @@ class PlanResult:
     predicted_pue: list[float] = field(default_factory=list)
     predicted_cooling_mode: list[str] = field(default_factory=list)
     expected_facility_energy_kwh: float = 0.0
-    baseline_facility_energy_kwh: float = 0.0  # 같은 예측으로 기준 설정 고정 시
-    expected_saving_pct: float = 0.0  # 전력량 기준 절감률
+    baseline_facility_energy_kwh: float | None = 0.0  # 같은 예측으로 기준 설정 고정 시
+    expected_saving_pct: float | None = 0.0  # 전력량 기준 절감률 (기준 운전 계산 불가 시 None)
     expected_energy_cost_krw: float | None = None
     baseline_energy_cost_krw: float | None = None
     expected_cost_saving_pct: float | None = None  # 전기요금 기준 절감률
@@ -115,6 +121,13 @@ class PlanResult:
 
 class TwinUnavailable(RuntimeError):
     pass
+
+
+def _saving_pct(value: float | None, baseline: float | None) -> float | None:
+    """기준 대비 절감률(%). 어느 한쪽을 계산할 수 없으면 None (트윈은 발산한 합계를 null 로 준다)."""
+    if value is None or baseline is None or baseline <= 0:
+        return None
+    return (1 - value / baseline) * 100
 
 
 class MPCController:
@@ -128,6 +141,7 @@ class MPCController:
         self._params: dict | None = None
         self._warm: np.ndarray | None = None  # 직전 해 (블록 값), 다음 계산 시작점
         self._last_setpoint: float | None = None  # 직전에 적용한 설정 온도 (변경 벌점 기준)
+        self.last_mode: str | None = None  # 직전 계획의 동작 모드 (/health 가 보여준다)
 
     # ------------------------------------------------------------ 서비스 호출
     @property
@@ -399,6 +413,12 @@ class MPCController:
                 warnings.append(
                     'forecast_out_of_range: 학습 범위 밖 부하라 예측 대신 최근 최대 부하 유지 가정'
                 )
+            elif not fc.get('input_quality_ok', True):
+                mode = 'mpc_naive'
+                warnings.append(
+                    'forecast_input_suspect: 입력 이력에 이상(고착·급변·평균 이동)이 있어 '
+                    '예측 대신 최근 최대 부하 유지 가정'
+                )
         except httpx.HTTPError as e:
             mode = 'mpc_naive'
             warnings.append(f'forecast_unavailable: {e}. 최근 최대 부하 유지 가정')
@@ -442,10 +462,19 @@ class MPCController:
         except (TwinUnavailable, httpx.HTTPError) as e:
             return self._fallback(f'twin_unavailable: {e}', warnings)
 
-        warnings += [f'twin.{w}' for w in traj['warnings']]
-        self._last_setpoint = float(plan[0])
         e_mpc, e_base = traj['total_facility_energy_kwh'], base['total_facility_energy_kwh']
         w_mpc, w_base = traj['total_energy_cost_krw'], base['total_energy_cost_krw']
+        if e_mpc is None:  # 고른 계획조차 트윈이 계산하지 못함 (수치 발산)
+            return self._fallback('twin_unavailable: 선택한 계획의 트윈 계산이 발산', warnings)
+        warnings += [f'twin.{w}' for w in traj['warnings']]
+        if e_base is None:
+            # 기준 운전(기준 설정 온도 고정, 축열조 없음)만 발산한 경우: 계획은 유효하니 절감률만 비운다
+            warnings.append(
+                'baseline_diverged: 기준 운전(설정 온도 고정)은 이 조건에서 계산할 수 없어 '
+                '절감률을 내지 않음'
+            )
+        self._last_setpoint = float(plan[0])
+        self.last_mode = mode
         return PlanResult(
             mode=mode,
             setpoint_c=float(plan[0]),
@@ -463,10 +492,10 @@ class MPCController:
             predicted_cooling_mode=traj['cooling_mode'],
             expected_facility_energy_kwh=e_mpc,
             baseline_facility_energy_kwh=e_base,
-            expected_saving_pct=(1 - e_mpc / e_base) * 100,
+            expected_saving_pct=_saving_pct(e_mpc, e_base),
             expected_energy_cost_krw=w_mpc,
             baseline_energy_cost_krw=w_base,
-            expected_cost_saving_pct=(1 - w_mpc / w_base) * 100,
+            expected_cost_saving_pct=_saving_pct(w_mpc, w_base),
             cost=cost,
             computation_time_s=time.perf_counter() - started,
             warnings=warnings,
@@ -496,6 +525,7 @@ class MPCController:
         except httpx.HTTPError:
             ref = 20.0
         self._last_setpoint = ref
+        self.last_mode = 'fallback'
         return PlanResult(
             mode='fallback',
             setpoint_c=ref,

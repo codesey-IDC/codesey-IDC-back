@@ -110,8 +110,9 @@ class PlanResponse(BaseModel):
     predicted_pue: list[float] = Field(default_factory=list)  # 시간대별 예상 PUE
     predicted_cooling_mode: list[str] = Field(default_factory=list)
     expected_facility_energy_kwh: float = 0.0
-    baseline_facility_energy_kwh: float = 0.0  # 같은 예측으로 기준 설정 고정 시
-    expected_saving_pct: float = 0.0  # 전력량 기준 절감률
+    # 같은 예측으로 기준 설정 고정 시. 기준 운전을 계산할 수 없으면 None (절감률도 None)
+    baseline_facility_energy_kwh: float | None = 0.0
+    expected_saving_pct: float | None = 0.0  # 전력량 기준 절감률
     expected_energy_cost_krw: float | None = None
     baseline_energy_cost_krw: float | None = None
     expected_cost_saving_pct: float | None = None  # 전기요금 기준 절감률
@@ -153,7 +154,9 @@ class SimulateSummary(BaseModel):
     capacity_limited_hours: int
     mode_hours: dict[str, int]
     final_tes_soc_kwh: float  # 마지막 축열조 저장량
-    diverged: bool  # 서버실 온도 발산으로 중단됨
+    diverged: bool  # 트윈이 계산하지 못해 중단됨 (수치 발산)
+    # 서버실 온도가 위험 온도(critical_temp_c)에 닿아 중단한 경우, 시작부터 걸린 시간. 아니면 None
+    hours_to_critical: int | None = None
 
 
 class SimulateResponse(BaseModel):

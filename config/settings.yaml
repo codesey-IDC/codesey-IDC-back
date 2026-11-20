@@ -28,6 +28,16 @@ paths:
 # scripts/compare_forecast_models.py: Val MAPE 로 선정. ridge (Val 24h 0.884%) < lgbm (0.983%) < 1주 전 값 (1.348%)
 forecast:
   model: ridge                     # 서비스 기본 모델: ridge (scripts/train_ridge.py) | lgbm (scripts/train_forecast.py)
+  # 입력 이력 품질 검사: 학습 범위 "안"에서 생기는 이상(센서 고착, 급변, 평균 이동·드리프트)을 잡는다.
+  # 범위 검사만으로는 이런 입력이 통과해 예측이 조용히 틀린다 (+10% 계단 → 예측 약 -8.6% 편향).
+  # 걸리면 warnings 에 적고 input_quality_ok=false → MPC 가 예측을 믿지 않는다 (mpc_naive).
+  # 한계값은 학습 구간(1~63일) 1시간 평균 데이터의 정상 최대값보다 넉넉히 크게 잡았다 (오경보 0).
+  input_quality:
+    stuck_window_hours: 6          # 고착: 연속 이 시간 동안의 표준편차가
+    stuck_std_kw: 1.0              #   이 값 미만이면 센서 멈춤. 정상 최소 7.3kW
+    jump_limit_kw: 300.0           # 급변: 직전 1시간 대비 변화. 정상 최대 191kW
+    shift_window_hours: 24         # 평균 이동: 최근 이 시간 평균과 1주 전 같은 시간대 평균의 차이가
+    shift_limit_kw: 80.0           #   이 값 초과. 정상 최대 29kW (이력이 168 + 24시간 이상일 때만 검사)
 
 # ---------------------------------------------------------------- 외부 데이터 수집
 weather:
@@ -82,7 +92,8 @@ datacenter:
   # 설정 온도를 올릴 때의 단점
   fan_threshold_c: 24.0            # [가정] 이 온도까지는 서버 팬이 최저 속도
   fan_power_coef_per_c2: 0.0033333333333333335  # [가정] (T - 기준)² × 계수 = IT 전력 증가 비율 (27℃ → +3%)
-  critical_temp_c: 32.0            # [가정] 위험 온도 (ASHRAE A1 허용 최대)
+                                   #        위험 온도에서 팬 최고 속도로 보고 그 위로는 늘지 않는다 (32℃ → +21.3% 상한)
+  critical_temp_c: 32.0            # [가정] 위험 온도 (ASHRAE A1 허용 최대). 폐루프 시뮬레이션은 여기 닿으면 중단
   min_ride_through_min: 15.0       # [가정] 냉각 정지 시 최소 버텨야 하는 시간(분)
 
 # ---------------------------------------------------------------- 전기요금 (시간대별)
@@ -171,6 +182,8 @@ simulation:
 
 # ---------------------------------------------------------------- 위기 시나리오
 # it_scale: IT 부하 배율 / outdoor_min_c: 외기온도 하한 / failed_chillers: 탈락한 칠러 대수
+# 세 값을 함께 적으면 복합 위기가 된다 (아래 4개). 실제 사고는 위기가 겹쳐서 온다:
+# 2022-07 런던 폭염 때는 고온과 냉각 설비 여러 대 고장이 동시에 일어났다.
 scenarios:
   normal:
     label: 정상 운영
@@ -187,3 +200,24 @@ scenarios:
     label: 폭염 (외기 38℃ 이상)
     strategy: 외기 냉각 불가 → 칠러 효율이 좋아지는 선까지만 설정 온도 상향
     outdoor_min_c: 38.0
+  # ---- 복합 위기 (멘토링 2026-11-18 보완점: 위기를 겹쳐서 볼 것)
+  heatwave_chiller:
+    label: 폭염 + 칠러 고장 (외기 38℃ 이상, 1대 탈락)
+    strategy: 외기 냉각 없이 남은 칠러 3대(용량 75%)로 운전, 용량 한계 안에서 설정 온도 조정
+    outdoor_min_c: 38.0
+    failed_chillers: 1
+  surge_heatwave:
+    label: 서버 급증 + 폭염 (IT 부하 +30%, 외기 38℃ 이상)
+    strategy: 예측 불신(mpc_naive)으로 최근 최대 부하를 가정하고 칠러만으로 운전
+    it_scale: 1.3
+    outdoor_min_c: 38.0
+  triple_crisis:
+    label: 급증 + 폭염 + 칠러 고장 (세 위기 동시)
+    strategy: 발열이 남은 냉각 용량(75%)에 가까워 여유가 거의 없음 → 축열조 방전으로 부족분 보충
+    it_scale: 1.3
+    outdoor_min_c: 38.0
+    failed_chillers: 1
+  chiller_double_failure:
+    label: 칠러 2대 고장 (4대 중 2대 탈락)
+    strategy: 냉각 용량(50%)이 발열보다 작아 설정 온도로는 못 막음 → 축열조 방전으로 버티는 시간을 벌고, 그 안에 부하 이전·복구 필요
+    failed_chillers: 2

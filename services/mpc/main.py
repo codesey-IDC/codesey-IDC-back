@@ -9,7 +9,7 @@ forecast-service(:8002), twin-service(:8001) 를 REST 로 호출한다.
   uvicorn services.mpc.main:app --port 8003
   → http://localhost:8003/docs
 
-  GET  /health
+  GET  /health            status: ok | degraded (예측·트윈에 닿지 않거나 직전 계획이 예측 불신·Fallback)
   POST /api/v1/control/optimize  현재 상태 → 시간대별 최적 냉각 설정값(설정 온도·축열조) + 예상 PUE
   POST /api/v1/control/mpc       현재 상태 → MPC 제어 결과 전체 (예측 부하·단가·예상 상태·계산 시간)
   POST /api/v1/plan       (대시보드용) 서버실 온도 + 최근 IT 부하 + 외기 예보 → MPC 결과. control/mpc 와 같은 계산
@@ -52,6 +52,7 @@ RESULTS_DIR = repo_path('mpc_results')
 FORECAST_URL = service_url('forecast')
 TWIN_URL = service_url('twin')
 TIMEOUT_S = float(section('services')['timeout_s'])
+HEALTH_TIMEOUT_S = 2.0  # /health 가 의존 서비스 상태를 물어볼 때 기다리는 시간
 
 app = FastAPI(title='IDC MPC Service', version='0.4.0')
 _controller = MPCController(
@@ -84,9 +85,42 @@ def _run_simulation(params: dict, progress: Callable[[int, int], None] | None = 
 _jobs = SimulationJobs(_run_simulation)
 
 
+def _dependency_state(client: httpx.Client) -> str:
+    """의존 서비스 상태: 'ok' | 'model_unavailable'(예측 모델 파일 없음) | 'unreachable'."""
+    try:
+        r = client.get('/health', timeout=HEALTH_TIMEOUT_S)
+        if r.status_code != 200:
+            return 'unreachable'
+        return 'model_unavailable' if r.json().get('model') == 'unavailable' else 'ok'
+    except (httpx.HTTPError, ValueError):
+        return 'unreachable'
+
+
 @app.get('/health')
-def health() -> dict[str, str]:
-    return {'status': 'ok', 'service': 'mpc', 'forecast_url': FORECAST_URL, 'twin_url': TWIN_URL}
+def health() -> dict:
+    """프로세스가 살아 있으면 항상 200. status 는 제어가 정상 경로(mpc)로 돌 수 있는지를 말한다.
+
+    ok        예측·트윈 서비스가 응답하고, 직전 계획이 정상 모드(mpc)였거나 아직 계획한 적이 없다
+    degraded  예측 또는 트윈에 닿지 않거나, 직전 계획이 예측 불신(mpc_naive)·Fallback 이었다.
+              안전하게 물러난 상태지만 "물러났다"는 사실을 알리기 위해 ok 와 구분한다 (reasons 에 이유)
+    """
+    deps = {
+        'forecast': _dependency_state(_controller.forecast),
+        'twin': _dependency_state(_controller.twin),
+    }
+    reasons = [f'{name}_{state}' for name, state in deps.items() if state != 'ok']
+    last_mode = _controller.last_mode
+    if last_mode not in (None, 'mpc'):
+        reasons.append(f'last_plan_{last_mode}')
+    return {
+        'status': 'degraded' if reasons else 'ok',
+        'service': 'mpc',
+        'forecast_url': FORECAST_URL,
+        'twin_url': TWIN_URL,
+        'dependencies': deps,
+        'last_plan_mode': last_mode,
+        'reasons': reasons,
+    }
 
 
 def _plan_response(r: PlanResult) -> PlanResponse:

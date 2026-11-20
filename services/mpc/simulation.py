@@ -18,6 +18,11 @@ scripts/simulate_mpc.py(14일 일괄 실험 스크립트)와 같은 절차를 �
   server_surge     IT 부하 1.3배
   chiller_failure  칠러 4대 중 1대 탈락 (냉각 용량 75%)
   heatwave         외기온도 최저 38℃
+  복합 위기         heatwave_chiller, surge_heatwave, triple_crisis(세 위기 동시),
+                   chiller_double_failure(칠러 2대 탈락, 냉각 용량 50%)
+
+서버실 온도가 위험 온도(critical_temp_c, 32℃)에 닿으면 그 시각에서 멈추고 summary.hours_to_critical 에
+시작부터 걸린 시간을 적는다. 그 위는 서버가 보호 정지하는 영역이라 트윈 모델이 맞지 않기 때문이다.
 
 가정: 외기 예보는 실제값과 같다. 1시간 평균값으로 진행한다 (5분 변동 무시).
 """
@@ -186,6 +191,7 @@ def run_closed_loop(
     params = twin.get('/api/v1/params').json()
     ref = float(params['supply_temp_ref_c'])
     t_min, t_max = params['room_temp_min_c'], params['room_temp_max_c']
+    t_critical = float(params['critical_temp_c'])
     prices = fetch_prices(twin, start, hours)
     mpc = MPCController(twin, forecast, config) if controller == 'mpc' else None
     pid = PIDController() if controller in ('rule_pid', 'rule_tes') else None
@@ -194,6 +200,7 @@ def run_closed_loop(
     soc = float(params['tes_capacity_kwh'] * params['tes_initial_soc'])
     last_setpoint = ref  # 직전에 적용한 설정 온도 (MPC 변화율 제약 기준)
     rows, warnings, diverged = [], [], False
+    hours_to_critical: int | None = None  # 위험 온도에 닿아 중단한 경우, 시작부터 걸린 시간
     for k in range(hours):
         now = start + pd.Timedelta(hours=k)
         actual = data.loc[now]
@@ -285,6 +292,16 @@ def run_closed_loop(
         )
         if progress is not None:
             progress(k + 1, hours)
+        if room >= t_critical:
+            # 위험 온도 이후는 서버 보호 정지 영역이라 트윈 모델이 맞지 않는다 → 여기서 멈춘다
+            hours_to_critical = k + 1
+            capacity_kw = params['cooling_capacity_kw'] * sc.capacity_factor
+            warnings.append(
+                f'critical_temp_reached: 시작 {hours_to_critical}시간 만에 서버실 온도가 위험 온도 '
+                f'{t_critical:.0f}℃ 에 도달({room:.1f}℃)해 중단. 냉각 용량 {capacity_kw:,.0f}kW 가 '
+                f'발열 {step["it_power_kw"][0]:,.0f}kW 보다 작아 설정 온도 조정으로는 막을 수 없음'
+            )
+            break
 
     if not rows:
         raise SimulationError(warnings[0] if warnings else '시뮬레이션 결과가 없습니다')
@@ -310,6 +327,7 @@ def run_closed_loop(
         'mode_hours': {str(k): int(v) for k, v in df['mode'].value_counts().items()},
         'final_tes_soc_kwh': float(df.tes_soc_kwh.iloc[-1]),
         'diverged': diverged,
+        'hours_to_critical': hours_to_critical,
     }
     return {
         'start': start.isoformat(),
