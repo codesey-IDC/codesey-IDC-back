@@ -19,6 +19,7 @@ forecast-service(:8002), twin-service(:8001) 를 REST 로 호출한다.
                           MPC 는 1시간당 약 0.4초라 24시간 이상이면 jobs 를 쓴다)
   GET  /api/v1/scenarios  위기 시나리오 목록
   GET  /api/v1/results    미리 계산해 둔 장기 비교 실험 (output/mpc/)
+  GET  /api/v1/sites      미리 계산해 둔 지역별(서울·춘천·제주) 비교 (output/sites/)
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from services.mpc.schemas import (
 )
 
 RESULTS_DIR = repo_path('mpc_results')
+SITES_DIR = repo_path('site_results')
 
 # 주소는 config/settings.yaml 의 services 항목 (환경변수 FORECAST_URL, TWIN_URL 이 있으면 그 값)
 FORECAST_URL = service_url('forecast')
@@ -311,9 +313,34 @@ def scenarios() -> list[ScenarioInfo]:
             it_scale=s.it_scale,
             outdoor_min_c=s.outdoor_min_c,
             capacity_factor=s.capacity_factor,
+            limit_test=s.limit_test,
         )
         for name, s in simulation.SCENARIOS.items()
     ]
+
+
+@app.get('/api/v1/sites')
+def site_results() -> dict:
+    """지역별 비교: 같은 IT 부하를 서울·춘천·제주의 외기(기상청 실측)에 놓았을 때.
+
+    summary     지역별 데이터 요약 (외기, 냉각 방식 비율, PUE, 월별) — scripts/build_dataset.py
+    comparison  전체 기간 Rule-based 운전과 계절별 MPC 절감률 — scripts/compare_sites.py (없으면 null)
+    """
+    summary_path = SITES_DIR / 'dataset_summary.json'
+    comparison_path = SITES_DIR / 'site_comparison.json'
+    if not summary_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail='지역별 데이터 요약이 없습니다. scripts/build_dataset.py 를 먼저 실행하세요.',
+        )
+    return {
+        'summary': json.loads(summary_path.read_text(encoding='utf-8')),
+        'comparison': (
+            json.loads(comparison_path.read_text(encoding='utf-8'))
+            if comparison_path.exists()
+            else None
+        ),
+    }
 
 
 @app.get('/api/v1/results', response_model=ResultsResponse)

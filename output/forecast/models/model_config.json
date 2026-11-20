@@ -1,6 +1,6 @@
 {
-    "generated_at": "2026-11-15T09:38:54+00:00",
-    "data_path": "data/synthetic_idc_90d.parquet",
+    "generated_at": "2026-11-20T07:37:30+00:00",
+    "data_path": "data/idc_2026_chuncheon.parquet",
     "target": "it_power_kw",
     "resample_rule": "h",
     "alpha": 0.1,
@@ -8,27 +8,27 @@
     "splits_day": {
         "train": [
             1,
-            63
+            161
         ],
         "val": [
-            64,
-            76
+            162,
+            196
         ],
         "test": [
-            77,
-            90
+            197,
+            231
         ]
     },
     "data_period": {
         "start": "2026-03-15 00:00:00",
-        "end": "2026-06-12 23:00:00"
+        "end": "2026-10-31 23:00:00"
     },
     "train_target_range_kw": {
-        "min": 2389.2635870810004,
-        "max": 3457.182593383133
+        "min": 2353.9485743040004,
+        "max": 3457.3821948771
     },
     "train_hourly_target_range_kw": {
-        "min": 2678.1992639986884,
+        "min": 2674.115469021977,
         "max": 3104.129783500852
     },
     "lgb_params": {
@@ -55,7 +55,7 @@
                 "dayofweek",
                 "is_weekend"
             ],
-            "cqr_offset_kw": 14.386935942130094,
+            "cqr_offset_kw": 5.522131919938147,
             "files": {
                 "q05": "it_load_24h_q05.txt",
                 "q50": "it_load_24h_q50.txt",
@@ -73,7 +73,7 @@
                 "dayofweek",
                 "is_weekend"
             ],
-            "cqr_offset_kw": 8.890933560113353,
+            "cqr_offset_kw": 4.5941757719970155,
             "files": {
                 "q05": "it_load_168h_q05.txt",
                 "q50": "it_load_168h_q50.txt",

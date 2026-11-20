@@ -150,7 +150,7 @@ def plot(df: pd.DataFrame, path: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description='제어 지연·예측 오차 민감도 분석')
-    ap.add_argument('--days', type=int, default=14)
+    ap.add_argument('--days', type=int, default=SIM.TEST_DAYS)
     ap.add_argument('--start', default=str(SIM.TEST_START))
     ap.add_argument(
         '--workers',

@@ -191,6 +191,7 @@ class ScenarioInfo(BaseModel):
     it_scale: float
     outdoor_min_c: float | None
     capacity_factor: float
+    limit_test: bool = False  # 한계 시험 (27℃ 유지 요구의 대상이 아님)
 
 
 class ResultsResponse(BaseModel):

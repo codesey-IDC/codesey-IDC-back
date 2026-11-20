@@ -1,6 +1,7 @@
 """냉각 수요(냉각 전력) 예측 평가 — forecast-service target='cooling_power' 를 REST 로 호출.
 
-Test 구간(2026-05-30 ~ 06-12)의 매시각에서 앞으로 24시간 냉각 전력을 예측하고 실제값(1시간 평균)과 비교한다.
+Test 구간 첫 14일(config/settings.yaml 의 simulation.test_start, test_days)의 매시각에서
+앞으로 24시간 냉각 전력을 예측하고 실제값(1시간 평균)과 비교한다.
 
   nMAE          Σ|예측 - 실제| / Σ실제 × 100 (과제 기준 10% 이내)
   구간 적중률    실제값이 90% 예측 구간 안에 든 비율
@@ -35,7 +36,7 @@ from services.twin.main import app as twin_app  # noqa: E402
 
 RESULT_PATH = repo_path('forecast_models').parent / 'cooling_metrics.json'
 TEST_START = pd.Timestamp(section('simulation')['test_start'])
-TEST_END = pd.Timestamp('2026-06-12 23:00')
+TEST_END = TEST_START + pd.Timedelta(days=section('simulation')['test_days'], hours=-1)
 HORIZON = 24
 HISTORY_HOURS = section('simulation')['history_hours']
 NOISE_SIGMAS_C = (0.0, 1.0, 2.0, 3.0)

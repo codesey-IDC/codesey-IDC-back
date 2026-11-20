@@ -3,7 +3,7 @@
 흐름
   1. 5분 단위 parquet → 1시간 평균 집계 (2,160행)
   2. 직접(direct) 다중 시점 데이터셋 생성: (예측 시점 t, 예측 거리 h) 한 쌍이 한 행
-  3. 시간 기준 분할: Train Day 1~63 / Val Day 64~76 / Test Day 77~90
+  3. 시간 기준 분할: Train Day 1~161 / Val Day 162~196 / Test Day 197~231 (forecast.splits_day)
   4. 분위수(q05, q50, q95)별 LightGBM 학습 (Train만 사용)
   5. Val에서 CQR로 90% 예측구간 보정
   6. Test에서 1회 평가 (MAPE, Coverage) + seasonal naive 기준선 비교
@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 저장소 루트
+from services.common.settings import section  # noqa: E402
 from services.forecast.features import (  # noqa: E402
     TARGET,
     WEATHER_COLS,
@@ -41,7 +42,7 @@ from services.forecast.features import (  # noqa: E402
     load_hourly,
 )
 
-DATA_PATH = 'data/synthetic_idc_90d.parquet'
+DATA_PATH = section('paths')['data']  # config/settings.yaml 의 기본 지역 데이터
 OUTPUT_DIR = 'output/forecast'
 MODEL_DIR = os.path.join(OUTPUT_DIR, 'models')
 CONFIG_PATH = os.path.join(MODEL_DIR, 'model_config.json')
@@ -66,7 +67,8 @@ FORBIDDEN_FEATURES = {
     'pue',
 }
 
-SPLITS = {'train': (1, 63), 'val': (64, 76), 'test': (77, 90)}
+# 날짜 순서대로 약 70 / 15 / 15 % (config/settings.yaml 의 forecast.splits_day)
+SPLITS = {k: tuple(v) for k, v in section('forecast')['splits_day'].items()}
 QUANTILES = (0.05, 0.5, 0.95)
 ALPHA = 0.10  # 90% 예측구간
 

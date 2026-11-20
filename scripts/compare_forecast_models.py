@@ -106,7 +106,7 @@ def compare() -> dict:
 def main() -> None:
     report = compare()
     models = report['models']
-    print('=== IT 부하 예측 모델 비교 (선정: Val / 보고: Test 2026-05-30 ~ 06-12) ===')
+    print('=== IT 부하 예측 모델 비교 (선정: Val / 보고: Test, forecast.splits_day) ===')
     print(
         f'{"모델":16s}{"Val 24h":>9s}{"Val 168h":>10s} |{"24h MAPE":>10s}{"168h MAPE":>11s}'
         f'{"24h 적중률":>11s}{"168h 적중률":>12s}{"24h 구간폭":>11s}'

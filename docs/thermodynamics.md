@@ -3,7 +3,7 @@
 구현: `services/twin/physics.py` (열·전력), `services/twin/esg.py` (ESG), `services/twin/tariff.py` (요금).
 상수: `config/settings.yaml` 의 `datacenter`, `esg`, `tariff`. 라이브러리 없이 직접 구현했다.
 
-표기: **[복원]** = 원본 데이터(`data/synthetic_idc_90d.parquet`, 90일·5분 단위·25,920행)에서 역으로 찾은 값.
+표기: **[복원]** = 원본 데이터(`data/synthetic_idc_90d.parquet`, 90일·5분 단위·25,920행. 지금 기본 데이터 `data/idc_2026_chuncheon.parquet` 의 첫 90일)에서 역으로 찾은 값.
 **[보정]** = Sinergym(EnergyPlus) 1년 결과에 맞춘 값 (11장). 냉각 효율 계수 4개가 여기에 해당한다.
 **[가정]** = 데이터에 없어 문헌·상식으로 정한 값.
 

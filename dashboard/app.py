@@ -100,6 +100,7 @@ SCENARIO_COLORS = {
     'triple_crisis': C['ink'],
     'chiller_double_failure': C['critical'],
 }
+SITE_COLORS = {'chuncheon': C['blue'], 'seoul': C['orange'], 'jeju': C['aqua']}
 # 예측 입력에 일부러 넣어 보는 이상 (IT 부하 예측 탭). 알람이 실제로 뜨는지 확인하는 용도
 ANOMALY_LABELS = {
     'none': '없음 (계측값 그대로)',
@@ -173,6 +174,12 @@ def simulate(start: str, hours: int, controller: str, scenario: str) -> dict:
 @st.cache_data(show_spinner=False)
 def scenarios() -> list[dict]:
     return _call('GET', f'{MPC_URL}/api/v1/scenarios')
+
+
+@st.cache_data(show_spinner=False)
+def site_results() -> dict:
+    """미리 계산해 둔 지역별(서울·춘천·제주) 비교."""
+    return _call('GET', f'{MPC_URL}/api/v1/sites')
 
 
 @st.cache_data(show_spinner=False)
@@ -458,6 +465,16 @@ first_day = (data_start + pd.Timedelta(hours=HISTORY_HOURS)).ceil('D').date()
 last_day = (data_end - pd.Timedelta(hours=23)).floor('D').date()
 SCENARIOS = {s['name']: s for s in scenario_list}
 
+
+def is_limit_test(name: str) -> bool:
+    """한계 시험 시나리오: 과제 요구(27℃ 이하 유지)의 대상이 아니고, 얼마나 버티는지를 본다."""
+    return bool(SCENARIOS[name].get('limit_test'))
+
+
+def scenario_label(name: str) -> str:
+    return ('[한계 시험] ' if is_limit_test(name) else '') + SCENARIOS[name]['label']
+
+
 with st.sidebar:
     st.header('운영 조건')
     start_day = st.date_input(
@@ -484,10 +501,13 @@ with st.sidebar:
     scenario = st.radio(
         '관제 화면에 적용할 시나리오',
         list(SCENARIOS),
-        format_func=lambda n: SCENARIOS[n]['label'],
+        format_func=scenario_label,
         label_visibility='collapsed',
     )
-    st.caption('시작 시각부터 구간 끝까지 적용됩니다.')
+    st.caption(
+        '시작 시각부터 구간 끝까지 적용됩니다. [한계 시험]은 냉각 용량이 발열보다 작아 27℃ 유지가 '
+        '불가능한 조건에서 버티는 시간을 보는 시나리오입니다.'
+    )
     if st.button(
         '다시 계산', width='stretch', help='저장된 결과를 지우고 서비스를 다시 호출합니다.'
     ):
@@ -559,8 +579,16 @@ else:
         '학습 범위 모두 정상. 위기 주입은 시뮬레이션 조건이라 이 상태에 들어가지 않습니다.'
     )
 
-tab_monitor, tab_forecast, tab_plan, tab_compare, tab_crisis, tab_esg = st.tabs(
-    ['관제', 'IT 부하 예측', 'MPC 계획', '제어기 비교', '위기 시나리오', 'ESG · 설정 온도']
+tab_monitor, tab_forecast, tab_plan, tab_compare, tab_crisis, tab_esg, tab_sites = st.tabs(
+    [
+        '관제',
+        'IT 부하 예측',
+        'MPC 계획',
+        '제어기 비교',
+        '위기 시나리오',
+        'ESG · 설정 온도',
+        '지역 비교',
+    ]
 )
 
 
@@ -699,6 +727,11 @@ with tab_monitor:
                 f'🚨 경보: 시작 {s["hours_to_critical"]}시간 만에 서버실 온도가 위험 온도 '
                 f'{CRITICAL_C:.0f}℃ 에 도달해 시뮬레이션을 멈췄습니다 (최고 {s["max_room_temp_c"]:.1f}℃). '
                 '냉각 용량이 발열보다 작아 설정 온도 조정으로는 막을 수 없는 상황입니다.'
+                + (
+                    ' (한계 시험 시나리오: 27℃ 유지 요구의 대상이 아닙니다.)'
+                    if is_limit_test(scenario)
+                    else ''
+                )
             )
         elif s['diverged'] or not s['temp_ok']:
             st.error(
@@ -792,6 +825,48 @@ with tab_monitor:
                     f'{MPC_MODE_LABELS.get(m, m)} {n}시간' for m, n in s['mode_hours'].items()
                 )
             )
+        st.subheader('서버 온도 분포')
+        compare_dist = controller != 'fixed_20'
+        fig = go.Figure()
+        bins = dict(
+            start=ROOM_MIN_C - 2.0, end=max(ROOM_MAX_C + 2.0, df.room_temp_c.max() + 0.5), size=0.5
+        )
+        fig.add_histogram(
+            x=df.room_temp_c,
+            xbins=bins,
+            name=CONTROLLER_LABELS[controller],
+            marker=dict(color=C['blue']),
+            opacity=0.85,
+            hovertemplate='%{x}℃: %{y}시간<extra></extra>',
+        )
+        if compare_dist:
+            fig.add_histogram(
+                x=frame(base).room_temp_c,
+                xbins=bins,
+                name=CONTROLLER_LABELS['fixed_20'],
+                marker=dict(color=C['muted']),
+                opacity=0.55,
+                hovertemplate='%{x}℃: %{y}시간<extra></extra>',
+            )
+        fig.add_vrect(
+            x0=ROOM_MIN_C, x1=ROOM_MAX_C, fillcolor=C['ok_band'], line_width=0, layer='below'
+        )
+        fig.add_vline(
+            x=ROOM_MAX_C,
+            line_dash='dash',
+            line_color=C['critical'],
+            line_width=1,
+            annotation_text=f'상한 {ROOM_MAX_C:.0f}℃',
+            annotation_position='top right',
+        )
+        fig.update_layout(barmode='overlay', bargap=0.05)
+        show(styled(fig, 260, '시간 수', '서버실 온도 (℃)', time_axis=False), 'room_hist')
+        q = df.room_temp_c.quantile([0.05, 0.5, 0.95])
+        st.caption(
+            f'0.5℃ 간격으로 센 시간 수입니다. 중앙값 {q[0.5]:.1f}℃, 5~95% 범위 {q[0.05]:.1f}~{q[0.95]:.1f}℃, '
+            f'허용 범위({ROOM_MIN_C:.0f}~{ROOM_MAX_C:.0f}℃) 안 {s["temp_maintenance_pct"]:.1f}%. '
+            '서버실은 한 구역(평균 흡기 온도)으로 모델링해 랙별 분포가 아니라 시간에 따른 분포입니다.'
+        )
         table_view(df.rename(columns={'timestamp': '시각'}))
 
 
@@ -1190,9 +1265,10 @@ with tab_crisis:
     picked = st.multiselect(
         '시뮬레이션할 위기 시나리오',
         crisis_names,
-        default=crisis_names,
-        format_func=lambda n: SCENARIOS[n]['label'],
-        help='단일 위기 3종과, 위기가 겹치는 복합 시나리오입니다 (config/settings.yaml 의 scenarios).',
+        default=[n for n in crisis_names if not is_limit_test(n)],
+        format_func=scenario_label,
+        help='단일 위기 3종과, 위기가 겹치는 복합 시나리오입니다 (config/settings.yaml 의 scenarios). '
+        '[한계 시험]은 27℃ 유지 요구의 대상이 아니라 기본 선택에서 빠져 있습니다.',
     )
     c_text, c_button = st.columns([3, 1], vertical_alignment='center')
     c_text.write(
@@ -1234,29 +1310,51 @@ with tab_crisis:
                 '🚨 계산하지 못한 시나리오: '
                 + ' · '.join(SCENARIOS[n]['label'].split(' (')[0] for n in failed)
             )
-        if stopped:
+        # 한계 시험은 27℃ 유지 요구의 대상이 아니므로 따로 알린다 (경보가 아니라 시험 결과)
+        limit_hit = [n for n in stopped + over if is_limit_test(n)]
+        stopped_required = [n for n in stopped if not is_limit_test(n)]
+        over_required = [n for n in over if not is_limit_test(n)]
+        required = [n for n in crisis if not is_limit_test(n)]
+        if stopped_required:
             st.error(
                 f'🚨 위험 온도 {CRITICAL_C:.0f}℃ 도달: '
                 + ' · '.join(
                     f'{SCENARIOS[n]["label"].split(" (")[0]} '
                     f'({crisis[n]["summary"]["hours_to_critical"]}시간 만에)'
-                    for n in stopped
+                    for n in stopped_required
                 )
             )
-        if over:
+        if over_required:
             st.error(
                 f'⚠️ 서버실 온도 {ROOM_MAX_C:.0f}℃ 초과: '
-                + ' · '.join(SCENARIOS[n]['label'].split(' (')[0] for n in over)
+                + ' · '.join(SCENARIOS[n]['label'].split(' (')[0] for n in over_required)
             )
-        if crisis and not (failed or stopped or over):
-            st.success(f'✅ 모든 위기 시나리오에서 서버실 온도 {ROOM_MAX_C:.0f}℃ 이하 유지')
+        if required and not (failed or stopped_required or over_required):
+            st.success(
+                f'✅ 위기 시나리오 {len(required)}종 모두 서버실 온도 {ROOM_MAX_C:.0f}℃ 이하 유지'
+            )
+        if limit_hit:
+            st.warning(
+                '⚠️ 한계 시험 (27℃ 유지 요구의 대상 아님): '
+                + ' · '.join(
+                    SCENARIOS[n]['label'].split(' (')[0]
+                    + (
+                        f' — {crisis[n]["summary"]["hours_to_critical"]}시간 만에 '
+                        f'위험 온도 {CRITICAL_C:.0f}℃ 도달'
+                        if n in stopped
+                        else f' — 최고 {crisis[n]["summary"]["max_room_temp_c"]:.1f}℃'
+                    )
+                    for n in limit_hit
+                )
+                + '. 냉각 용량이 발열보다 작아 어떤 제어로도 27℃ 를 지킬 수 없는 조건에서 버티는 시간을 봅니다.'
+            )
 
         cards = list(crisis.items()) + [(n, None) for n in failed]
         for row_start in range(0, len(cards), 4):
             row = cards[row_start : row_start + 4]
             for col, (name, r) in zip(st.columns(4), row):
                 with col.container(border=True, height='stretch'):
-                    st.markdown(f'**{SCENARIOS[name]["label"]}**')
+                    st.markdown(f'**{scenario_label(name)}**')
                     if r is None:
                         st.error('계산 못 함')
                         st.caption(failed[name])
@@ -1476,6 +1574,104 @@ with tab_esg:
             )
 
     st.divider()
+    st.subheader('비용 · 에너지 · 탄소 Trade-off (제어기별)')
+    try:
+        trade = precomputed('base')
+    except ApiError as err:
+        st.error(str(err))
+        trade = None
+    if trade:
+        carbon_factor = CONFIG['esg']['carbon_factor_tco2_per_mwh']
+        rows = pd.DataFrame(
+            [
+                {
+                    'name': c,
+                    '제어기': CONTROLLER_LABELS[c],
+                    '전력량 (MWh)': m['facility_energy_kwh'] / 1000,
+                    '탄소 (tCO2)': m['facility_energy_kwh'] / 1000 * carbon_factor,
+                    '전기요금 (만원)': m['energy_cost_krw'] / 1e4,
+                    '평균 단가 (원/kWh)': m['energy_cost_krw'] / m['facility_energy_kwh'],
+                    '평균 고장률': m['average_xfactor'],
+                }
+                for c in CONTROLLER_LABELS
+                if c in trade['controllers']
+                for m in [trade['controllers'][c]]
+            ]
+        )
+        t0 = pd.Timestamp(trade['start'])
+        st.caption(
+            f'{t0:%Y-%m-%d} 부터 {trade["hours"] // 24}일, 제어기 6종의 사전 계산 결과입니다. '
+            f'탄소는 전력량 × {carbon_factor} tCO2/MWh 라 전력량과 같이 움직이고(위쪽 축), '
+            '요금은 언제 쓰느냐(시간대별 단가)에 따라 따로 움직입니다.'
+        )
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            fig = go.Figure()
+            for _, r in rows.iterrows():
+                fig.add_scatter(
+                    x=[r['전력량 (MWh)']],
+                    y=[r['전기요금 (만원)']],
+                    mode='markers+text',
+                    name=r['제어기'],
+                    text=[r['제어기']],
+                    textposition='top center',
+                    marker=dict(
+                        size=10 + 40 * (r['평균 고장률'] - 1.0),
+                        color=CONTROLLER_COLORS[r['name']],
+                        line=dict(width=1, color='#ffffff'),
+                    ),
+                    customdata=[[r['탄소 (tCO2)'], r['평균 단가 (원/kWh)'], r['평균 고장률']]],
+                    hovertemplate='전력량 %{x:,.1f} MWh · 요금 %{y:,.0f}만원<br>'
+                    '탄소 %{customdata[0]:,.1f} tCO2 · 평균 단가 %{customdata[1]:.1f}원/kWh · '
+                    '고장률 %{customdata[2]:.2f}<extra>%{fullData.name}</extra>',
+                )
+            lo, hi = rows['전력량 (MWh)'].min(), rows['전력량 (MWh)'].max()
+            pad = (hi - lo) * 0.12 or 1.0
+            fig.add_scatter(  # 위쪽 축(탄소)을 그리기 위한 보이지 않는 점
+                x=[(lo - pad) * carbon_factor, (hi + pad) * carbon_factor],
+                y=[rows['전기요금 (만원)'].min()] * 2,
+                xaxis='x2',
+                mode='markers',
+                marker=dict(opacity=0),
+                hoverinfo='skip',
+                showlegend=False,
+            )
+            fig.update_layout(
+                xaxis=dict(range=[lo - pad, hi + pad]),
+                xaxis2=dict(
+                    overlaying='x',
+                    side='top',
+                    title='탄소 배출 (tCO2)',
+                    range=[(lo - pad) * carbon_factor, (hi + pad) * carbon_factor],
+                    showgrid=False,
+                ),
+            )
+            show(
+                styled(
+                    fig, 380, '전기요금 (만원)', '전체 전력량 (MWh)', legend=False, time_axis=False
+                ),
+                'tradeoff',
+            )
+        with c2:
+            st.dataframe(
+                rows.drop(columns='name'),
+                width='stretch',
+                hide_index=True,
+                column_config={
+                    '전력량 (MWh)': st.column_config.NumberColumn(format='%.1f'),
+                    '탄소 (tCO2)': st.column_config.NumberColumn(format='%.1f'),
+                    '전기요금 (만원)': st.column_config.NumberColumn(format='%.0f'),
+                    '평균 단가 (원/kWh)': st.column_config.NumberColumn(format='%.1f'),
+                    '평균 고장률': st.column_config.NumberColumn(format='%.2f'),
+                },
+            )
+            st.caption(
+                '왼쪽 아래일수록 요금·에너지·탄소가 모두 적습니다. 점이 클수록 평균 고장률(서버실 온도)이 높습니다. '
+                '축열 시간표처럼 전력량(탄소)은 거의 그대로인데 요금만 줄어드는 운전과, '
+                '26℃ 고정처럼 전력량은 줄지만 고장률이 오르는 운전이 대비됩니다.'
+            )
+
+    st.divider()
     st.subheader('설정 온도를 올리면 얻는 것과 잃는 것')
     default_it = float(frame(sim).it_base_kw.mean()) if sim else 2900.0
     default_out = float(frame(sim).outdoor_temp_c.mean()) if sim else 22.0
@@ -1554,6 +1750,113 @@ with tab_esg:
                 ]
             ]
         )
+
+# ---------------------------------------------------------------- 지역 비교 (사전 계산)
+
+with tab_sites:
+    try:
+        site_data = site_results()
+    except ApiError as e:
+        st.error(str(e))
+        site_data = None
+
+    if site_data:
+        summary, comparison = site_data['summary'], site_data['comparison']
+        names = list(summary)
+        first = summary[names[0]]
+        st.caption(
+            f'같은 가상 데이터센터(같은 IT 부하)를 지역별 외기에 놓았을 때의 비교입니다. '
+            f'{first["monthly"][0]["month"]} ~ {first["monthly"][-1]["month"]} '
+            f'({first["days"]:.0f}일), '
+            '외기는 기상청 ASOS 실측입니다. 지역마다 다른 것은 외기뿐이고, 습도·염해·전력 계통 차이는 '
+            '모델에 들어 있지 않습니다.'
+        )
+        full = comparison['full_period'] if comparison else {}
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        '지역': s['label'],
+                        '외기 평균 (℃)': s['outdoor_mean_c'],
+                        '외기 최고 (℃)': s['outdoor_max_c'],
+                        '습도 평균 (%)': s['humidity_mean_pct'],
+                        '외기 냉각 (%)': s['free_cooling_pct'],
+                        '혼합 (%)': s['hybrid_pct'],
+                        '칠러 (%)': s['chiller_pct'],
+                        '평균 PUE (20℃ 고정)': s['average_pue'],
+                        '냉각 전력량 (MWh)': s['cooling_energy_mwh'],
+                        '전기요금 (억원, 20℃ 고정)': (
+                            full[n]['controllers']['fixed_20']['energy_cost_krw'] / 1e8
+                            if n in full
+                            else None
+                        ),
+                    }
+                    for n, s in summary.items()
+                ]
+            ),
+            width='stretch',
+            hide_index=True,
+            column_config={
+                '평균 PUE (20℃ 고정)': st.column_config.NumberColumn(format='%.3f'),
+                '전기요금 (억원, 20℃ 고정)': st.column_config.NumberColumn(format='%.2f'),
+            },
+        )
+
+        panels = (
+            ('월별 평균 PUE (20℃ 고정)', 'average_pue', '%{y:.3f}', 'PUE'),
+            ('월별 외기 냉각 시간 비율', 'free_cooling_pct', '%{y:.1f}%', '%'),
+            ('월별 평균 외기온도', 'outdoor_mean_c', '%{y:.1f}℃', '℃'),
+        )
+        for col, (title, column, hover, unit) in zip(st.columns(3), panels):
+            with col:
+                st.markdown(f'**{title}**')
+                fig = go.Figure()
+                for n in names:
+                    monthly = summary[n]['monthly']
+                    fig.add_scatter(
+                        x=[m['month'][5:] + '월' for m in monthly],
+                        y=[m[column] for m in monthly],
+                        name=summary[n]['label'],
+                        mode='lines+markers',
+                        line=dict(color=SITE_COLORS.get(n, C['muted']), width=2),
+                        marker=dict(size=7),
+                        hovertemplate=hover,
+                    )
+                show(styled(fig, 280, unit, time_axis=False), f'site_{column}')
+
+        windows = comparison['windows'] if comparison else []
+        if windows:
+            st.subheader('계절별 MPC 요금 절감률 (Rule-based PID 대비)')
+            days = windows[0]['hours'] // 24
+            fig = go.Figure()
+            for n in names:
+                rows = [w for w in windows if w['site'] == n]
+                saving = [w['controllers']['mpc']['cost_saving_vs_rule_pid_pct'] for w in rows]
+                fig.add_bar(
+                    x=[f'{w["start"][5:10]} 부터 {days}일' for w in rows],
+                    y=saving,
+                    name=summary[n]['label'],
+                    marker=dict(color=SITE_COLORS.get(n, C['muted']), cornerradius=4),
+                    text=[f'{v:.1f}%' for v in saving],
+                    textposition='outside',
+                    customdata=[
+                        (w['outdoor_mean_c'], w['controllers']['mpc']['max_room_temp_c'])
+                        for w in rows
+                    ],
+                    hovertemplate='절감 %{y:.2f}% · 외기 평균 %{customdata[0]:.1f}℃ · '
+                    '최고 서버실 %{customdata[1]:.1f}℃',
+                )
+            fig.update_layout(barmode='group')
+            show(styled(fig, 320, '%', time_axis=False), 'site_mpc_saving')
+            worst = max(w['controllers']['mpc']['max_room_temp_c'] for w in windows)
+            violations = sum(w['controllers']['mpc']['violation_hours'] for w in windows)
+            st.caption(
+                f'지역·계절 {len(windows)}개 구간 모두에서 MPC 최고 서버실 온도 {worst:.1f}℃, '
+                f'위반 {violations}시간. 예측 모델은 IT 부하만 쓰므로 세 지역에 같은 모델을 썼습니다. '
+                '`scripts/compare_sites.py` 로 미리 계산한 결과입니다.'
+            )
+        else:
+            st.info('계절별 MPC 비교는 `python scripts/compare_sites.py` 를 실행하면 표시됩니다.')
 
 st.divider()
 st.caption(

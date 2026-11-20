@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-11-15T07:19:27+00:00",
+    "generated_at": "2026-11-20T07:37:33+00:00",
     "model": "ridge",
     "ridge_alpha": 1.0,
     "alpha": 0.1,
@@ -17,10 +17,10 @@
                 "is_weekend"
             ],
             "file": "ridge_24h.joblib",
-            "conformal_halfwidth_kw": 52.29802883017874,
+            "conformal_halfwidth_kw": 51.60853064201228,
             "test": {
-                "mape": 0.8598109092239523,
-                "coverage_pct": 90.41731066460588
+                "mape": 0.8995448811940995,
+                "coverage_pct": 89.09869083585096
             }
         },
         "168h": {
@@ -35,10 +35,10 @@
                 "is_weekend"
             ],
             "file": "ridge_168h.joblib",
-            "conformal_halfwidth_kw": 51.78702114534053,
+            "conformal_halfwidth_kw": 51.52508964666913,
             "test": {
-                "mape": 0.8353856344383875,
-                "coverage_pct": 91.24775158572376
+                "mape": 0.9072163872582029,
+                "coverage_pct": 88.98080741230973
             }
         }
     }

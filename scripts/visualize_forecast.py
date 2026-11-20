@@ -20,9 +20,10 @@ import pandas as pd
 import plotly.graph_objects as go
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 저장소 루트
+from services.common.settings import section  # noqa: E402
 from services.forecast.features import TARGET, load_hourly  # noqa: E402
 
-DATA_PATH = 'data/synthetic_idc_90d.parquet'
+DATA_PATH = section('paths')['data']  # config/settings.yaml 의 기본 지역 데이터
 FORECAST_DIR = 'output/forecast'
 PLOT_DIR = os.path.join(FORECAST_DIR, 'plots')
 
@@ -314,7 +315,8 @@ def main() -> None:
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         f'<title>IT 부하 예측 결과</title><style>{css}</style></head><body>'
         '<h1>IT 부하 예측 결과 (LightGBM 분위수 회귀 + CQR)</h1>'
-        '<p>Test 구간 2026-05-30 ~ 06-12 · 냉각 부하 예측값은 IT 부하 예측값과 같다</p>'
+        f'<p>Test 구간 {tp24["target_time"].min():%Y-%m-%d} ~ {tp24["target_time"].max():%m-%d}'
+        ' · 냉각 부하 예측값은 IT 부하 예측값과 같다</p>'
         + ''.join(f'<div class="card">{p}</div>' for p in parts)
         + f'<div class="card">{metrics_table(metrics)}</div>'
         '</body></html>'

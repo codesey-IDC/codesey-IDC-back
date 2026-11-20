@@ -136,16 +136,16 @@ curl -X POST :8001/api/v1/simulate -H 'Content-Type: application/json' \
 | `origin_time` | 예측 시점 (이력의 마지막 시각) |
 | `timestamps[]`, `predictions[]` | 앞으로 h 시간의 시각, 중앙값 예측 |
 | `pi_lower[]`, `pi_upper[]` | 90% 예측 구간 |
-| `in_training_range`, `warnings[]` | 학습 범위(2,389~3,457kW) 밖 입력·예측이면 `false` + 경고 → MPC 가 예측을 믿지 않는다 |
+| `in_training_range`, `warnings[]` | 학습 범위(2,354~3,457kW) 밖 입력·예측이면 `false` + 경고 → MPC 가 예측을 믿지 않는다 |
 | `input_quality_ok`, `input_checks[]` | 학습 범위 **안**에서 생기는 입력 이상 검사 (아래). 하나라도 걸리면 `false` + 경고 `input_{rule}: …` → MPC 가 예측을 믿지 않는다 |
 | `it_predictions[]`, `outdoor_temp_c[]`, `cooling_mode[]`, `free_cooling_fraction[]`, `pue[]`, `outdoor_source` | `cooling_power` 일 때만 |
 
 입력 품질 검사 (`input_checks[]`: `rule`, `label`, `ok`, `measured`, `limit`. 한계값은 `config/settings.yaml` 의 `forecast.input_quality`)
 | rule | 잡는 것 | 기준 (정상 데이터 최대·최소) |
 |---|---|---|
-| `stuck` | 값 고착 (센서 멈춤) | 6시간 표준편차 < 1.0kW (정상 최소 7.3kW) |
-| `jump` | 1시간 사이 급변 (범위 안 스파이크 포함) | 변화 > 300kW (정상 최대 191kW) |
-| `level_shift` | 계단·점진 드리프트 | 최근 24시간 평균이 1주 전 같은 시간대보다 ±80kW 초과 (정상 최대 29kW) |
+| `stuck` | 값 고착 (센서 멈춤) | 6시간 표준편차 < 1.0kW (정상 최소 6.3kW) |
+| `jump` | 1시간 사이 급변 (범위 안 스파이크 포함) | 변화 > 300kW (정상 최대 209kW) |
+| `level_shift` | 계단·점진 드리프트 | 최근 24시간 평균이 1주 전 같은 시간대보다 ±80kW 초과 (정상 최대 30kW) |
 
 `level_shift` 는 1주 전 값이 필요해 **이력이 192시간 이상일 때만** 검사한다. 더 짧으면 `ok: null`(검사 못 함)이다.
 대시보드와 MPC 는 192시간을 보낸다. 범위 검사만 있을 때는 +10% 계단 입력이 그대로 통과해 예측이 약 8.6% 낮게 나왔다.
@@ -153,15 +153,15 @@ curl -X POST :8001/api/v1/simulate -H 'Content-Type: application/json' \
 오류: 이력 168시간 미만·최근 168시간에 빈 시간 → 422, 외기 개수 틀림 → 422, 예측 구간 외기 데이터 없음 → 422,
 모델 없음 → 503, twin-service 장애(`cooling_power`) → 503.
 
-성능 (Test 2026-05-30~06-12): 아래 표, 자세한 비교는 `output/forecast/model_comparison.json`.
+성능 (Test 2026-09-27~10-31, 35일. 학습 03-15~08-22, 검증 08-23~09-26): 아래 표, 자세한 비교는 `output/forecast/model_comparison.json`.
 
 | 모델 | 24h MAPE | 168h MAPE | 90% 적중률 (24h/168h) |
 |---|---|---|---|
-| **ridge (기본)** | 0.860% | 0.835% | 90.4% / 91.2% |
-| lgbm | 0.885% | 0.881% | 92.3% / 91.1% |
-| 1주 전 값 (기준선) | 1.240% | 1.210% | — |
+| **ridge (기본)** | 0.900% | 0.907% | 89.1% / 89.0% |
+| lgbm | 0.922% | 0.925% | 88.9% / 88.6% |
+| 1주 전 값 (기준선) | 1.244% | 1.251% | — |
 
-냉각 전력 예측 nMAE 0.99%, 냉각 모드 적중률 99.0% (`output/forecast/cooling_metrics.json`).
+냉각 전력 예측 nMAE 1.29%, 냉각 모드 적중률 99.2% (Test 첫 14일, `output/forecast/cooling_metrics.json`).
 
 ---
 
@@ -268,6 +268,13 @@ curl -X POST :8003/api/v1/control/optimize -H 'Content-Type: application/json' \
 | `chiller_double_failure` | 칠러 4대 중 2대 탈락 (냉각 용량 50% < 발열). 위험 온도 도달 시 중단 |
 
 `config/settings.yaml` 의 `scenarios` 에 `it_scale`·`outdoor_min_c`·`failed_chillers` 를 함께 적으면 복합 위기가 된다.
+
+### `GET /api/v1/sites`
+지역별 비교 (미리 계산한 결과, `output/sites/`). 같은 가상 데이터센터(같은 IT 부하)를 서울·춘천·제주의 외기(기상청 ASOS 실측)에 놓았을 때다.
+- `summary{}`: 지역 → `label`, `station_id`, 외기 평균·최저·최고, 습도, 냉각 방식 비율(`free_cooling_pct`, `hybrid_pct`, `chiller_pct`),
+  `average_pue`, `cooling_energy_mwh`, `monthly[]`(월별 외기·외기 냉각 비율·PUE) — `scripts/build_dataset.py`
+- `comparison`: `full_period{}`(전체 기간 20℃ 고정·Rule-based PID 의 요금·PUE), `windows[]`(계절별 1주일 MPC 요금 절감률) —
+  `scripts/compare_sites.py`. 아직 실행하지 않았으면 null. 요약 파일이 없으면 404.
 
 ### `GET /api/v1/results?scenario=base`
 `scripts/simulate_mpc.py` 로 미리 계산한 장기 비교 실험 (`output/mpc/metrics_{scenario}.json`, `timeseries_{scenario}.csv`).

@@ -1,0 +1,683 @@
+{
+  "sites": {
+    "chuncheon": {
+      "label": "춘천",
+      "station_id": 101
+    },
+    "seoul": {
+      "label": "서울",
+      "station_id": 108
+    },
+    "jeju": {
+      "label": "제주",
+      "station_id": 184
+    }
+  },
+  "full_period": {
+    "chuncheon": {
+      "site": "chuncheon",
+      "start": "2026-03-23 00:00:00",
+      "hours": 5352,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 2172485795.264204,
+          "facility_energy_kwh": 19384296.85298845,
+          "cooling_energy_kwh": 3071320.0004978175,
+          "average_pue": 1.2476883820582594,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 2172485795.264204,
+          "facility_energy_kwh": 19384296.85298845,
+          "cooling_energy_kwh": 3071320.0004978175,
+          "average_pue": 1.2476883820582594,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        }
+      },
+      "outdoor_mean_c": 19.890599308669657,
+      "outdoor_max_c": 37.8,
+      "cooling_mode_hours": {
+        "chiller": 3291.5,
+        "free_cooling": 1355.4,
+        "hybrid": 705.1
+      }
+    },
+    "seoul": {
+      "site": "seoul",
+      "start": "2026-03-23 00:00:00",
+      "hours": 5352,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 2200683740.7768416,
+          "facility_energy_kwh": 19684737.096419338,
+          "cooling_energy_kwh": 3371760.2439287053,
+          "average_pue": 1.2670264990956943,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 2200683740.7768416,
+          "facility_energy_kwh": 19684737.096419338,
+          "cooling_energy_kwh": 3371760.2439287053,
+          "average_pue": 1.2670264990956943,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        }
+      },
+      "outdoor_mean_c": 21.41777917912307,
+      "outdoor_max_c": 37.75416666666667,
+      "cooling_mode_hours": {
+        "chiller": 3750.2,
+        "free_cooling": 972.8,
+        "hybrid": 629.1
+      }
+    },
+    "jeju": {
+      "site": "jeju",
+      "start": "2026-03-23 00:00:00",
+      "hours": 5352,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 2220685222.995412,
+          "facility_energy_kwh": 19919771.173824653,
+          "cooling_energy_kwh": 3606794.321334018,
+          "average_pue": 1.2821546871331768,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 2220685222.995412,
+          "facility_energy_kwh": 19919771.173824653,
+          "cooling_energy_kwh": 3606794.321334018,
+          "average_pue": 1.2821546871331768,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        }
+      },
+      "outdoor_mean_c": 22.66282230941704,
+      "outdoor_max_c": 35.84583333333333,
+      "cooling_mode_hours": {
+        "chiller": 4180.9,
+        "hybrid": 593.2,
+        "free_cooling": 577.8
+      }
+    }
+  },
+  "windows": [
+    {
+      "site": "chuncheon",
+      "start": "2026-04-13 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 60632079.56844406,
+          "facility_energy_kwh": 589537.9526626759,
+          "cooling_energy_kwh": 77582.30059964836,
+          "average_pue": 1.209118109745181,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 60632079.56844406,
+          "facility_energy_kwh": 589537.9526626759,
+          "cooling_energy_kwh": 77582.30059964836,
+          "average_pue": 1.209118109745181,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 56137799.26699038,
+          "facility_energy_kwh": 552149.8543255022,
+          "cooling_energy_kwh": 38824.49840086972,
+          "average_pue": 1.1294149808701415,
+          "max_room_temp_c": 26.78570296263133,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 7.41238026708344
+        }
+      },
+      "outdoor_mean_c": 17.473735119047618,
+      "outdoor_max_c": 30.016666666666666,
+      "cooling_mode_hours": {
+        "chiller": 76.8,
+        "free_cooling": 69.9,
+        "hybrid": 21.3
+      }
+    },
+    {
+      "site": "seoul",
+      "start": "2026-04-13 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 61784746.35058114,
+          "facility_energy_kwh": 601563.8613637522,
+          "cooling_energy_kwh": 89608.2093007245,
+          "average_pue": 1.2337827542026576,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 61784746.35058114,
+          "facility_energy_kwh": 601563.8613637522,
+          "cooling_energy_kwh": 89608.2093007245,
+          "average_pue": 1.2337827542026576,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 56404314.0244336,
+          "facility_energy_kwh": 554648.917772234,
+          "cooling_energy_kwh": 40135.50367699528,
+          "average_pue": 1.1319070556886286,
+          "max_room_temp_c": 26.82837454342087,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 8.708350594526525
+        }
+      },
+      "outdoor_mean_c": 19.498834325396825,
+      "outdoor_max_c": 29.016666666666666,
+      "cooling_mode_hours": {
+        "chiller": 95.5,
+        "hybrid": 40.0,
+        "free_cooling": 32.5
+      }
+    },
+    {
+      "site": "jeju",
+      "start": "2026-04-13 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 58697119.10561771,
+          "facility_energy_kwh": 574084.3543818613,
+          "cooling_energy_kwh": 62128.702318833624,
+          "average_pue": 1.1774234148444251,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 58697119.10561771,
+          "facility_energy_kwh": 574084.3543818613,
+          "cooling_energy_kwh": 62128.702318833624,
+          "average_pue": 1.1774234148444251,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 55222990.77203043,
+          "facility_energy_kwh": 542269.3923382198,
+          "cooling_energy_kwh": 30052.64774744703,
+          "average_pue": 1.111605327174593,
+          "max_room_temp_c": 25.27979539145423,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 5.918737386984951
+        }
+      },
+      "outdoor_mean_c": 17.134548611111114,
+      "outdoor_max_c": 21.96666666666667,
+      "cooling_mode_hours": {
+        "hybrid": 80.2,
+        "chiller": 58.4,
+        "free_cooling": 29.3
+      }
+    },
+    {
+      "site": "chuncheon",
+      "start": "2026-06-08 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 78626627.32503176,
+          "facility_energy_kwh": 611625.3277466348,
+          "cooling_energy_kwh": 99558.65249281582,
+          "average_pue": 1.2541464328168601,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 78626627.32503176,
+          "facility_energy_kwh": 611625.3277466348,
+          "cooling_energy_kwh": 99558.65249281582,
+          "average_pue": 1.2541464328168601,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 70427064.58992124,
+          "facility_energy_kwh": 561124.2992451901,
+          "cooling_energy_kwh": 45426.33774303879,
+          "average_pue": 1.1424914546709755,
+          "max_room_temp_c": 26.950711114989105,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 10.428480801058203
+        }
+      },
+      "outdoor_mean_c": 20.650074404761902,
+      "outdoor_max_c": 30.645833333333332,
+      "cooling_mode_hours": {
+        "chiller": 106.9,
+        "hybrid": 42.8,
+        "free_cooling": 18.2
+      }
+    },
+    {
+      "site": "seoul",
+      "start": "2026-06-08 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 80251889.09678906,
+          "facility_energy_kwh": 629017.51869351,
+          "cooling_energy_kwh": 116950.84343969106,
+          "average_pue": 1.2898093676976878,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 80251889.09678906,
+          "facility_energy_kwh": 629017.51869351,
+          "cooling_energy_kwh": 116950.84343969106,
+          "average_pue": 1.2898093676976878,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 71197501.53289178,
+          "facility_energy_kwh": 568067.600330449,
+          "cooling_energy_kwh": 51226.19397676931,
+          "average_pue": 1.1540696488601385,
+          "max_room_temp_c": 26.917873613398083,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 11.28246034554663
+        }
+      },
+      "outdoor_mean_c": 22.229960317460318,
+      "outdoor_max_c": 31.55416666666667,
+      "cooling_mode_hours": {
+        "chiller": 142.2,
+        "hybrid": 25.8
+      }
+    },
+    {
+      "site": "jeju",
+      "start": "2026-06-08 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 80525135.64281717,
+          "facility_energy_kwh": 635042.3607319864,
+          "cooling_energy_kwh": 122975.68547816738,
+          "average_pue": 1.3021633919802962,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 80525135.64281717,
+          "facility_energy_kwh": 635042.3607319864,
+          "cooling_energy_kwh": 122975.68547816738,
+          "average_pue": 1.3021633919802962,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 70971624.76035261,
+          "facility_energy_kwh": 568279.0127847854,
+          "cooling_energy_kwh": 50279.213911236875,
+          "average_pue": 1.1519173650677157,
+          "max_room_temp_c": 26.9550525188215,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 11.864010915598788
+        }
+      },
+      "outdoor_mean_c": 22.305059523809526,
+      "outdoor_max_c": 28.712500000000002,
+      "cooling_mode_hours": {
+        "chiller": 166.6,
+        "hybrid": 1.4
+      }
+    },
+    {
+      "site": "chuncheon",
+      "start": "2026-08-03 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 83301947.01526415,
+          "facility_energy_kwh": 659902.1623072017,
+          "cooling_energy_kwh": 148257.8289833223,
+          "average_pue": 1.354255730579833,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 83301947.01526415,
+          "facility_energy_kwh": 659902.1623072017,
+          "cooling_energy_kwh": 148257.8289833223,
+          "average_pue": 1.354255730579833,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 78159140.73763573,
+          "facility_energy_kwh": 630411.7016804601,
+          "cooling_energy_kwh": 113094.72091725795,
+          "average_pue": 1.2795487319745986,
+          "max_room_temp_c": 26.917492629671436,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 6.17369276697225
+        }
+      },
+      "outdoor_mean_c": 29.67750496031746,
+      "outdoor_max_c": 37.8,
+      "cooling_mode_hours": {
+        "chiller": 168.0
+      }
+    },
+    {
+      "site": "seoul",
+      "start": "2026-08-03 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 83402933.46378021,
+          "facility_energy_kwh": 661070.986942804,
+          "cooling_energy_kwh": 149426.65361892473,
+          "average_pue": 1.356654400490647,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 83402933.46378021,
+          "facility_energy_kwh": 661070.986942804,
+          "cooling_energy_kwh": 149426.65361892473,
+          "average_pue": 1.356654400490647,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 80186332.75874157,
+          "facility_energy_kwh": 654303.3504505495,
+          "cooling_energy_kwh": 141199.5067375204,
+          "average_pue": 1.338946348562759,
+          "max_room_temp_c": 26.878107145965714,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 3.856699724399415
+        }
+      },
+      "outdoor_mean_c": 31.67889384920635,
+      "outdoor_max_c": 37.75416666666667,
+      "cooling_mode_hours": {
+        "chiller": 168.0
+      }
+    },
+    {
+      "site": "jeju",
+      "start": "2026-08-03 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 83402933.46378021,
+          "facility_energy_kwh": 661070.986942804,
+          "cooling_energy_kwh": 149426.65361892473,
+          "average_pue": 1.356654400490647,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 83402933.46378021,
+          "facility_energy_kwh": 661070.986942804,
+          "cooling_energy_kwh": 149426.65361892473,
+          "average_pue": 1.356654400490647,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 79525504.15659195,
+          "facility_energy_kwh": 646319.5965295985,
+          "cooling_energy_kwh": 128846.94560912257,
+          "average_pue": 1.3114424021229474,
+          "max_room_temp_c": 26.9161385281435,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 4.649032289580235
+        }
+      },
+      "outdoor_mean_c": 29.367311507936513,
+      "outdoor_max_c": 32.88333333333333,
+      "cooling_mode_hours": {
+        "chiller": 168.0
+      }
+    },
+    {
+      "site": "chuncheon",
+      "start": "2026-10-05 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 55771162.03639147,
+          "facility_energy_kwh": 575997.1707437406,
+          "cooling_energy_kwh": 63456.35657385865,
+          "average_pue": 1.1799977924889067,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 55771162.03639147,
+          "facility_energy_kwh": 575997.1707437406,
+          "cooling_energy_kwh": 63456.35657385865,
+          "average_pue": 1.1799977924889067,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 52518716.38751201,
+          "facility_energy_kwh": 545753.383147539,
+          "cooling_energy_kwh": 32357.256205494265,
+          "average_pue": 1.11617720164376,
+          "max_room_temp_c": 26.42855095620076,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 5.831769556383259
+        }
+      },
+      "outdoor_mean_c": 15.34751984126984,
+      "outdoor_max_c": 28.583333333333332,
+      "cooling_mode_hours": {
+        "free_cooling": 89.0,
+        "chiller": 56.2,
+        "hybrid": 22.8
+      }
+    },
+    {
+      "site": "seoul",
+      "start": "2026-10-05 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 57320733.04080033,
+          "facility_energy_kwh": 591496.5275065681,
+          "cooling_energy_kwh": 78955.71333668608,
+          "average_pue": 1.2117500435312494,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 57320733.04080033,
+          "facility_energy_kwh": 591496.5275065681,
+          "cooling_energy_kwh": 78955.71333668608,
+          "average_pue": 1.2117500435312494,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 53009480.46075098,
+          "facility_energy_kwh": 550709.4918356944,
+          "cooling_energy_kwh": 36120.61577082224,
+          "average_pue": 1.1237028107746778,
+          "max_room_temp_c": 26.898247782174014,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 7.521279563854577
+        }
+      },
+      "outdoor_mean_c": 18.355679563492064,
+      "outdoor_max_c": 29.05416666666667,
+      "cooling_mode_hours": {
+        "chiller": 81.2,
+        "free_cooling": 47.6,
+        "hybrid": 39.2
+      }
+    },
+    {
+      "site": "jeju",
+      "start": "2026-10-05 00:00:00",
+      "hours": 168,
+      "controllers": {
+        "fixed_20": {
+          "energy_cost_krw": 60534724.58434161,
+          "facility_energy_kwh": 626654.912698532,
+          "cooling_energy_kwh": 114114.09852864992,
+          "average_pue": 1.2837761211253864,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "rule_pid": {
+          "energy_cost_krw": 60534724.58434161,
+          "facility_energy_kwh": 626654.912698532,
+          "cooling_energy_kwh": 114114.09852864992,
+          "average_pue": 1.2837761211253864,
+          "max_room_temp_c": 20.0,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 0.0
+        },
+        "mpc": {
+          "energy_cost_krw": 53833833.02774446,
+          "facility_energy_kwh": 559661.0269143464,
+          "cooling_energy_kwh": 40088.2994301642,
+          "average_pue": 1.1310140951883467,
+          "max_room_temp_c": 26.948849302504648,
+          "violation_hours": 0,
+          "fallback_hours": 0,
+          "naive_forecast_hours": 0,
+          "cost_saving_vs_rule_pid_pct": 11.069500361335516
+        }
+      },
+      "outdoor_mean_c": 21.163789682539683,
+      "outdoor_max_c": 25.191666666666666,
+      "cooling_mode_hours": {
+        "chiller": 155.3,
+        "hybrid": 12.7
+      }
+    }
+  ]
+}

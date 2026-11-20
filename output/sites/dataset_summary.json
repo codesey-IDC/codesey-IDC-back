@@ -1,0 +1,245 @@
+{
+  "chuncheon": {
+    "label": "춘천",
+    "station_id": 101,
+    "days": 231.0,
+    "outdoor_mean_c": 19.41,
+    "outdoor_min_c": -2.5,
+    "outdoor_max_c": 37.8,
+    "humidity_mean_pct": 69.6,
+    "free_cooling_pct": 27.7,
+    "hybrid_pct": 12.9,
+    "chiller_pct": 59.4,
+    "it_mean_kw": 2902.6,
+    "cooling_energy_mwh": 3105.2,
+    "average_pue": 1.243,
+    "monthly": [
+      {
+        "month": "2026-03",
+        "outdoor_mean_c": 8.96,
+        "humidity_mean_pct": 57.7,
+        "free_cooling_pct": 79.4,
+        "chiller_pct": 10.7,
+        "average_pue": 1.1288
+      },
+      {
+        "month": "2026-04",
+        "outdoor_mean_c": 13.66,
+        "humidity_mean_pct": 57.7,
+        "free_cooling_pct": 63.1,
+        "chiller_pct": 23.9,
+        "average_pue": 1.1606
+      },
+      {
+        "month": "2026-05",
+        "outdoor_mean_c": 18.63,
+        "humidity_mean_pct": 65.0,
+        "free_cooling_pct": 28.4,
+        "chiller_pct": 52.1,
+        "average_pue": 1.2201
+      },
+      {
+        "month": "2026-06",
+        "outdoor_mean_c": 22.42,
+        "humidity_mean_pct": 67.8,
+        "free_cooling_pct": 4.8,
+        "chiller_pct": 80.4,
+        "average_pue": 1.2817
+      },
+      {
+        "month": "2026-07",
+        "outdoor_mean_c": 26.04,
+        "humidity_mean_pct": 81.8,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.3467
+      },
+      {
+        "month": "2026-08",
+        "outdoor_mean_c": 26.63,
+        "humidity_mean_pct": 76.5,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 99.6,
+        "average_pue": 1.347
+      },
+      {
+        "month": "2026-09",
+        "outdoor_mean_c": 20.12,
+        "humidity_mean_pct": 74.5,
+        "free_cooling_pct": 14.8,
+        "chiller_pct": 60.2,
+        "average_pue": 1.2424
+      },
+      {
+        "month": "2026-10",
+        "outdoor_mean_c": 14.04,
+        "humidity_mean_pct": 70.4,
+        "free_cooling_pct": 54.3,
+        "chiller_pct": 25.9,
+        "average_pue": 1.1635
+      }
+    ]
+  },
+  "seoul": {
+    "label": "서울",
+    "station_id": 108,
+    "days": 231.0,
+    "outdoor_mean_c": 20.95,
+    "outdoor_min_c": 1.4,
+    "outdoor_max_c": 37.8,
+    "humidity_mean_pct": 62.2,
+    "free_cooling_pct": 20.8,
+    "hybrid_pct": 11.5,
+    "chiller_pct": 67.7,
+    "it_mean_kw": 2902.6,
+    "cooling_energy_mwh": 3405.7,
+    "average_pue": 1.2616,
+    "monthly": [
+      {
+        "month": "2026-03",
+        "outdoor_mean_c": 10.54,
+        "humidity_mean_pct": 52.9,
+        "free_cooling_pct": 78.4,
+        "chiller_pct": 8.8,
+        "average_pue": 1.1267
+      },
+      {
+        "month": "2026-04",
+        "outdoor_mean_c": 14.97,
+        "humidity_mean_pct": 51.3,
+        "free_cooling_pct": 54.8,
+        "chiller_pct": 26.4,
+        "average_pue": 1.1671
+      },
+      {
+        "month": "2026-05",
+        "outdoor_mean_c": 19.56,
+        "humidity_mean_pct": 60.1,
+        "free_cooling_pct": 19.1,
+        "chiller_pct": 59.4,
+        "average_pue": 1.2354
+      },
+      {
+        "month": "2026-06",
+        "outdoor_mean_c": 24.03,
+        "humidity_mean_pct": 60.4,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 94.6,
+        "average_pue": 1.3165
+      },
+      {
+        "month": "2026-07",
+        "outdoor_mean_c": 26.91,
+        "humidity_mean_pct": 78.6,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.354
+      },
+      {
+        "month": "2026-08",
+        "outdoor_mean_c": 28.1,
+        "humidity_mean_pct": 71.3,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.3551
+      },
+      {
+        "month": "2026-09",
+        "outdoor_mean_c": 22.55,
+        "humidity_mean_pct": 60.9,
+        "free_cooling_pct": 1.6,
+        "chiller_pct": 91.6,
+        "average_pue": 1.296
+      },
+      {
+        "month": "2026-10",
+        "outdoor_mean_c": 16.18,
+        "humidity_mean_pct": 57.3,
+        "free_cooling_pct": 38.3,
+        "chiller_pct": 34.4,
+        "average_pue": 1.1812
+      }
+    ]
+  },
+  "jeju": {
+    "label": "제주",
+    "station_id": 184,
+    "days": 231.0,
+    "outdoor_mean_c": 22.23,
+    "outdoor_min_c": 5.6,
+    "outdoor_max_c": 35.9,
+    "humidity_mean_pct": 68.9,
+    "free_cooling_pct": 13.8,
+    "hybrid_pct": 10.8,
+    "chiller_pct": 75.4,
+    "it_mean_kw": 2902.6,
+    "cooling_energy_mwh": 3639.2,
+    "average_pue": 1.2762,
+    "monthly": [
+      {
+        "month": "2026-03",
+        "outdoor_mean_c": 12.29,
+        "humidity_mean_pct": 60.4,
+        "free_cooling_pct": 78.2,
+        "chiller_pct": 5.4,
+        "average_pue": 1.1228
+      },
+      {
+        "month": "2026-04",
+        "outdoor_mean_c": 15.4,
+        "humidity_mean_pct": 67.7,
+        "free_cooling_pct": 44.0,
+        "chiller_pct": 18.7,
+        "average_pue": 1.1502
+      },
+      {
+        "month": "2026-05",
+        "outdoor_mean_c": 19.49,
+        "humidity_mean_pct": 67.3,
+        "free_cooling_pct": 12.0,
+        "chiller_pct": 68.9,
+        "average_pue": 1.2402
+      },
+      {
+        "month": "2026-06",
+        "outdoor_mean_c": 22.64,
+        "humidity_mean_pct": 74.9,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 99.3,
+        "average_pue": 1.3095
+      },
+      {
+        "month": "2026-07",
+        "outdoor_mean_c": 28.8,
+        "humidity_mean_pct": 72.1,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.3541
+      },
+      {
+        "month": "2026-08",
+        "outdoor_mean_c": 29.14,
+        "humidity_mean_pct": 72.2,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.3567
+      },
+      {
+        "month": "2026-09",
+        "outdoor_mean_c": 25.25,
+        "humidity_mean_pct": 67.0,
+        "free_cooling_pct": 0.0,
+        "chiller_pct": 100.0,
+        "average_pue": 1.3477
+      },
+      {
+        "month": "2026-10",
+        "outdoor_mean_c": 20.23,
+        "humidity_mean_pct": 65.7,
+        "free_cooling_pct": 5.0,
+        "chiller_pct": 79.1,
+        "average_pue": 1.2582
+      }
+    ]
+  }
+}

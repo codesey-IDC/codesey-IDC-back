@@ -20,7 +20,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Git LFS 포인터(수백 바이트 껍데기)로 받은 경우 빌드를 멈추고 안내한다
-RUN python -c "import os, sys; p='data/synthetic_idc_90d.parquet'; \
+RUN python -c "import os, sys; p='data/idc_2026_chuncheon.parquet'; \
 ok = os.path.exists(p) and os.path.getsize(p) > 10000; \
 sys.exit(0 if ok else 'ERROR: ' + p + ' 가 없거나 Git LFS 포인터입니다. git lfs install && git lfs pull 후 다시 빌드하세요.')"
 

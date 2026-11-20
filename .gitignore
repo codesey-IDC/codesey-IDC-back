@@ -6,6 +6,7 @@
 !/output/mpc/
 !/output/benchmark/
 !/output/validation/
+!/output/sites/
 
 # python
 __pycache__/

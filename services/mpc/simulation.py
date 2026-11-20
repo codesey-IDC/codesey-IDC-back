@@ -53,6 +53,7 @@ class Scenario:
     it_scale: float = 1.0
     outdoor_min_c: float | None = None
     capacity_factor: float = 1.0
+    limit_test: bool = False  # 한계 시험: 27℃ 유지 요구의 대상이 아닌 시나리오 (버티는 시간을 본다)
 
 
 def load_scenarios() -> dict[str, Scenario]:
@@ -71,6 +72,7 @@ def load_scenarios() -> dict[str, Scenario]:
             it_scale=float(s.get('it_scale', 1.0)),
             outdoor_min_c=s.get('outdoor_min_c'),
             capacity_factor=(units - failed) / units,
+            limit_test=bool(s.get('limit_test', False)),
         )
     return out
 

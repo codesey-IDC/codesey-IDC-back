@@ -20,7 +20,7 @@ if errorlevel 1 (
 )
 
 rem Git LFS 없이 받으면 데이터가 수백 바이트짜리 껍데기 파일로 내려온다
-set "DATA=data\synthetic_idc_90d.parquet"
+set "DATA=data\idc_2026_chuncheon.parquet"
 if not exist "%DATA%" (
     echo [오류] 데이터 파일이 없습니다: %DATA%
     echo        git lfs install 후 git lfs pull 을 실행해 주세요.

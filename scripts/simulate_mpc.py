@@ -17,9 +17,9 @@
   - 1시간 평균값으로 진행한다 (5분 변동 무시).
 
 실행:
-  python scripts/simulate_mpc.py                     # Test 14일 (2026-05-30 ~ 06-12)
+  python scripts/simulate_mpc.py                     # Test 구간 첫 14일 (simulation.test_start)
   python scripts/simulate_mpc.py --days 3
-  python scripts/simulate_mpc.py --surge             # 6/5 10~15시 IT 부하 1.3배 (서버 급증) 시나리오
+  python scripts/simulate_mpc.py --surge             # 둘째 날 10~15시 IT 부하 1.3배 (서버 급증)
 결과: output/mpc/
 """
 
@@ -56,6 +56,9 @@ from services.twin.main import app as twin_app  # noqa: E402
 DATA_PATH = repo_path('data')
 OUT_DIR = str(repo_path('mpc_results'))
 TEST_START = pd.Timestamp(section('simulation')['test_start'])
+TEST_DAYS: int = section('simulation')['test_days']
+SURGE_HOUR = pd.Timedelta(hours=10)  # 서버 급증: 둘째 날(하루짜리 실험이면 첫날) 10시부터
+SURGE_LENGTH = pd.Timedelta(hours=6)
 HISTORY_HOURS: int = section('simulation')['history_hours']
 
 
@@ -242,18 +245,19 @@ def run(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description='MPC 폐루프 시뮬레이션')
-    ap.add_argument('--days', type=int, default=14)
+    ap.add_argument('--days', type=int, default=TEST_DAYS)
     ap.add_argument('--start', default=str(TEST_START))
-    ap.add_argument('--surge', action='store_true', help='6/5 10~15시 IT 부하 1.3배')
+    ap.add_argument('--surge', action='store_true', help='시작 둘째 날 10~15시 IT 부하 1.3배')
     ap.add_argument('--controllers', default='fixed_20,rule_pid,rule_tes,fixed_26,reactive,mpc')
     args = ap.parse_args()
 
     hourly = load_hourly()
     tag = 'surge' if args.surge else 'base'
-    if args.surge:
-        surge = (hourly.index >= '2026-06-05 10:00') & (hourly.index < '2026-06-05 16:00')
-        hourly.loc[surge, 'it_power_kw'] *= 1.3
     start, hours = pd.Timestamp(args.start), args.days * 24
+    if args.surge:
+        surge_from = start.normalize() + pd.Timedelta(days=min(1, args.days - 1)) + SURGE_HOUR
+        surge = (hourly.index >= surge_from) & (hourly.index < surge_from + SURGE_LENGTH)
+        hourly.loc[surge, 'it_power_kw'] *= 1.3
 
     os.makedirs(OUT_DIR, exist_ok=True)
     frames, summaries = [], {}

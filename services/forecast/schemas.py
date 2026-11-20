@@ -16,7 +16,7 @@ class HistoryPoint(BaseModel):
 class ForecastRequest(BaseModel):
     """예측 요청.
 
-    history 를 생략하면 서버가 가진 기본 데이터(data/synthetic_idc_90d.parquet)의
+    history 를 생략하면 서버가 가진 기본 데이터(config/settings.yaml 의 paths.data)의
     마지막 시점을 예측 시점으로 쓴다. 넘길 때는 5분 또는 1시간 간격으로
     최소 168시간(5분 기준 2,016행) 이상이어야 한다.
 
