@@ -15,7 +15,7 @@
 - 단위는 필드 이름 끝에 붙인다: `_kw`(kW), `_kwh`(kWh), `_c`(℃), `_krw`(원), `_min`(분), `_pct`(%).
 - 오류: `422` 입력 오류(형식·범위·길이), `404` 없는 자원, `503` 의존 서비스나 모델 없음. 본문은 `{"detail": "..."}`.
 - 서비스 주소는 `config/settings.yaml` 의 `services`, 환경변수 `TWIN_URL`, `FORECAST_URL`, `MPC_URL` 이 우선한다.
-- 응답 시간 (실측 p95, `python scripts/benchmark_api.py`): MPC 제어 2.70초, 나머지 0.11초 이하. 기준 10초.
+- 응답 시간 (실측 p95, `python scripts/benchmark_api.py`): MPC 제어 2.73초, 나머지 0.10초 이하. 기준 10초.
 
 ---
 

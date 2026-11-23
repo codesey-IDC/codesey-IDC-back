@@ -350,6 +350,65 @@ def room_range(*series: Any) -> tuple[float, float]:
     return low, high
 
 
+PERIOD_LABELS = {'off_peak': '경부하', 'mid': '중간부하', 'peak': '최대부하'}
+TIP = '%{customdata}'  # 미리 만들어 둔 상세 문구를 그대로 보여준다
+
+
+def tes_text(kw: float) -> str:
+    """축열조 출력 (+충전 / -방전)."""
+    if abs(kw) < 1:
+        return '축열조 대기'
+    return f'축열조 {"충전" if kw > 0 else "방전"} {abs(kw):,.0f} kW'
+
+
+def room_text(room: float) -> str:
+    """서버실 온도와 허용 상한까지 남은 여유."""
+    margin = ROOM_MAX_C - room
+    state = f'상한까지 {margin:.1f}℃' if margin >= 0 else f'상한 초과 {-margin:.1f}℃'
+    return f'{room:.1f}℃ ({ROOM_MAX_C:.0f}℃ {state})'
+
+
+def sim_tips(df: pd.DataFrame) -> pd.DataFrame:
+    """폐루프 시뮬레이션 결과에서 시각별 마우스 오버 문구를 만든다 (그래프 선마다 한 열)."""
+    rows = []
+    for r in df.itertuples():
+        mode = MODE_LABELS.get(r.cooling_mode, r.cooling_mode)
+        period = PERIOD_LABELS.get(r.tariff_period, r.tariff_period)
+        ride = f'{r.ride_through_min:.0f}분' if pd.notna(r.ride_through_min) else '-'
+        room = f'{room_text(r.room_temp_c)}<br>비상 여유 {ride} · 고장률 {r.xfactor:.2f}배' + (
+            ' · ⚠ 여유 부족' if r.violation else ''
+        )
+        total = (
+            f'{r.facility_power_kw:,.0f} kW · PUE {r.pue:.3f}<br>'
+            f'단가 {r.price_krw_per_kwh:.1f}원/kWh ({period}) · '
+            f'이 시간 요금 {r.energy_cost_krw / 1e4:,.1f}만원'
+        )
+        rows.append(
+            {
+                'it': f'{r.it_power_kw:,.0f} kW (전체의 {r.it_power_kw / r.facility_power_kw:.0%})',
+                'cooling': (
+                    f'{r.cooling_power_kw:,.0f} kW · {mode} · {tes_text(r.tes_kw)}'
+                    + (' · ⚠ 용량 한계' if r.capacity_limited else '')
+                ),
+                'total': total,
+                'room': room,
+                'setpoint': f'{r.setpoint_c:.1f}℃ · 외기 {r.outdoor_temp_c:.1f}℃ · {mode}',
+                'outdoor': (
+                    f'{r.outdoor_temp_c:.1f}℃ · {mode} (외기 냉각 {r.free_cooling_fraction:.0%})<br>'
+                    f'제거 열량 {r.heat_removed_kw:,.0f} kW · 축열조 저장량 {r.tes_soc_kwh:,.0f} kWh'
+                ),
+                'room_full': (
+                    f'{room}<br>설정 {r.setpoint_c:.1f}℃ · 외기 {r.outdoor_temp_c:.1f}℃ · {mode}'
+                ),
+                'power_full': (
+                    f'{total}<br>IT {r.it_power_kw:,.0f} kW · 냉각 {r.cooling_power_kw:,.0f} kW'
+                    f' · {tes_text(r.tes_kw)}'
+                ),
+            }
+        )
+    return pd.DataFrame(rows, index=df.index)
+
+
 def cursor_line(fig: go.Figure, x: Any) -> None:
     """선택한 시각을 세로 점선으로 표시."""
     fig.add_shape(
@@ -651,11 +710,12 @@ def monitor_live(sim: dict, base: dict, playing: bool) -> None:
     with left:
         st.subheader('전력 소비 추이')
         other = df.facility_power_kw - df.it_power_kw - df.cooling_power_kw
+        tips = sim_tips(df)
         fig = go.Figure()
-        for name, y, color in (
-            ('IT', df.it_power_kw, C['blue']),
-            ('냉각', df.cooling_power_kw, C['orange']),
-            ('기타 손실', other, C['aqua']),
+        for name, y, color, tip in (
+            ('IT', df.it_power_kw, C['blue'], tips.it),
+            ('냉각', df.cooling_power_kw, C['orange'], tips.cooling),
+            ('기타 손실', other, C['aqua'], other.map('{:,.0f} kW (전력 변환·배전 손실)'.format)),
         ):
             fig.add_scatter(
                 x=df.timestamp,
@@ -664,8 +724,19 @@ def monitor_live(sim: dict, base: dict, playing: bool) -> None:
                 stackgroup='power',
                 mode='lines',
                 line=dict(width=0.5, color=color),
-                hovertemplate='%{y:,.0f} kW',
+                customdata=tip,
+                hovertemplate=TIP,
             )
+        fig.add_scatter(  # 선은 그리지 않고 마우스 오버에 합계·PUE·요금만 보여준다
+            x=df.timestamp,
+            y=df.facility_power_kw,
+            name='전체',
+            mode='lines',
+            line=dict(width=0, color=C['ink']),
+            showlegend=False,
+            customdata=tips.total,
+            hovertemplate=TIP,
+        )
         cursor_line(fig, now.timestamp)
         show(styled(fig, 290, 'kW'), 'power')
     with right:
@@ -676,13 +747,15 @@ def monitor_live(sim: dict, base: dict, playing: bool) -> None:
             y=df.room_temp_c,
             name='서버실 온도',
             line=dict(color=C['blue'], width=2),
-            hovertemplate='%{y:.1f}℃',
+            customdata=tips.room,
+            hovertemplate=TIP,
         )
         fig.add_scatter(
             x=df.timestamp,
             y=df.setpoint_c,
             name='설정 온도',
-            hovertemplate='%{y:.1f}℃',
+            customdata=tips.setpoint,
+            hovertemplate=TIP,
             line=dict(color=C['orange'], width=2, dash='dot', shape='hv'),
         )
         room_limits(fig, *room_range(df.room_temp_c, df.setpoint_c))
@@ -697,8 +770,8 @@ def monitor_live(sim: dict, base: dict, playing: bool) -> None:
         y=df.outdoor_temp_c,
         name='외기온도',
         line=dict(color=C['ink'], width=2),
-        customdata=list(zip(df.cooling_mode.map(MODE_LABELS), df.free_cooling_fraction * 100)),
-        hovertemplate='%{y:.1f}℃ · %{customdata[0]} (외기 냉각 %{customdata[1]:.0f}%)',
+        customdata=tips.outdoor,
+        hovertemplate=TIP,
     )
     cursor_line(fig, now.timestamp)
     show(styled(fig, 230, '외기온도 (℃)'), 'modes')
@@ -996,20 +1069,39 @@ with tab_forecast:
             line=dict(color=C['muted'], width=2),
             hovertemplate='%{y:,.0f} kW',
         )
+        lower, upper = pd.Series(fc['pi_lower'], index=t), pd.Series(fc['pi_upper'], index=t)
         if act is not None:
+            act_tips = []
+            for when, y in act.items():
+                if when not in pred.index or pd.isna(y):
+                    act_tips.append(f'{y:,.0f} kW')
+                    continue
+                diff = y - pred[when]
+                inside = lower[when] <= y <= upper[when]
+                act_tips.append(
+                    f'{y:,.0f} kW · 예측보다 {diff:+,.0f} kW ({diff / y:+.2%})'
+                    f' · 90% 구간 {"안" if inside else "밖 ⚠"}'
+                )
             fig.add_scatter(
                 x=act.index,
                 y=act.values,
                 name='실제',
                 line=dict(color=C['orange'], width=2),
-                hovertemplate='%{y:,.0f} kW',
+                customdata=act_tips,
+                hovertemplate=TIP,
             )
+        origin = pd.Timestamp(fc['origin_time'])
         fig.add_scatter(
             x=t,
             y=fc['predictions'],
             name='예측 (중앙값)',
             line=dict(color=C['blue'], width=2),
-            hovertemplate='%{y:,.0f} kW',
+            customdata=[
+                f'{p:,.0f} kW · 예측 시점에서 {(when - origin) / pd.Timedelta(hours=1):.0f}시간 뒤<br>'
+                f'90% 구간 {lo:,.0f} ~ {hi:,.0f} kW (폭 {hi - lo:,.0f} kW)'
+                for when, p, lo, hi in zip(t, fc['predictions'], fc['pi_lower'], fc['pi_upper'])
+            ],
+            hovertemplate=TIP,
         )
         cursor_line(fig, pd.Timestamp(fc['origin_time']))
         show(styled(fig, 380, 'IT 부하 (kW)'), 'forecast')
@@ -1065,6 +1157,20 @@ with tab_plan:
 
         if plan['timestamps']:
             t = pd.to_datetime(plan['timestamps'])
+            n_plan = len(t)
+
+            def plan_values(field: str, default: Any) -> list:
+                """계획 응답의 시간대별 값. 물러난 모드에서는 비어 있을 수 있어 기본값으로 채운다."""
+                values = plan.get(field) or []
+                return values if len(values) == n_plan else [default] * n_plan
+
+            plan_modes = [
+                MODE_LABELS.get(m, '-') for m in plan_values('predicted_cooling_mode', '')
+            ]
+            plan_tes = plan_values('tes_plan_kw', 0.0)
+            plan_soc = plan_values('predicted_tes_soc_kwh', float('nan'))
+            plan_pue = plan_values('predicted_pue', float('nan'))
+            plan_price = plan_values('price_krw_per_kwh', float('nan'))
             c1, c2 = st.columns(2)
             with c1:
                 st.subheader('설정 온도 계획과 예상 서버실 온도')
@@ -1074,13 +1180,21 @@ with tab_plan:
                     y=plan['predicted_room_temp_c'],
                     name='예상 서버실 온도',
                     line=dict(color=C['blue'], width=2),
-                    hovertemplate='%{y:.1f}℃',
+                    customdata=[room_text(v) for v in plan['predicted_room_temp_c']],
+                    hovertemplate=TIP,
                 )
                 fig.add_scatter(
                     x=t,
                     y=plan['plan_c'],
                     name='설정 온도 계획',
-                    hovertemplate='%{y:.1f}℃',
+                    customdata=[
+                        f'{sp:.1f}℃ · {mode}<br>{tes_text(tes)}'
+                        + ('' if pd.isna(soc) else f' (저장량 {soc:,.0f} kWh)')
+                        for sp, mode, tes, soc in zip(
+                            plan['plan_c'], plan_modes, plan_tes, plan_soc
+                        )
+                    ],
+                    hovertemplate=TIP,
                     line=dict(color=C['orange'], width=2, dash='dot', shape='hv'),
                 )
                 room_limits(
@@ -1098,14 +1212,30 @@ with tab_plan:
                     y=plan['predicted_facility_kw'],
                     name='전체 전력',
                     line=dict(color=C['blue'], width=2),
-                    hovertemplate='%{y:,.0f} kW',
+                    customdata=[
+                        f'{kw:,.0f} kW'
+                        + ('' if pd.isna(pue) else f' · PUE {pue:.3f}')
+                        + (
+                            ''
+                            if pd.isna(price)
+                            else f'<br>단가 {price:.1f}원/kWh · 이 시간 요금 {kw * price / 1e4:,.1f}만원'
+                        )
+                        for kw, pue, price in zip(
+                            plan['predicted_facility_kw'], plan_pue, plan_price
+                        )
+                    ],
+                    hovertemplate=TIP,
                 )
                 fig.add_scatter(
                     x=t,
                     y=plan['forecast_it_kw'],
                     name='IT 부하 예측',
                     line=dict(color=C['orange'], width=2),
-                    hovertemplate='%{y:,.0f} kW',
+                    customdata=[
+                        f'{it:,.0f} kW (전체의 {it / kw:.0%})' if kw else f'{it:,.0f} kW'
+                        for it, kw in zip(plan['forecast_it_kw'], plan['predicted_facility_kw'])
+                    ],
+                    hovertemplate=TIP,
                 )
                 show(styled(fig, 320, 'kW'), 'plan_power')
         if plan['warnings']:
@@ -1417,11 +1547,12 @@ with tab_crisis:
 
         if runs:
             frames = {name: frame(r) for name, r in runs.items()}
+            crisis_tips = {name: sim_tips(d) for name, d in frames.items()}
             panels = (
-                ('서버실 온도', 'room_temp_c', '%{y:.1f}℃', '℃', 'crisis_temp'),
-                ('전체 전력', 'facility_power_kw', '%{y:,.0f} kW', 'kW', 'crisis_power'),
+                ('서버실 온도', 'room_temp_c', 'room_full', '℃', 'crisis_temp'),
+                ('전체 전력', 'facility_power_kw', 'power_full', 'kW', 'crisis_power'),
             )
-            for col, (title, column, hover, unit, key) in zip(st.columns(2), panels):
+            for col, (title, column, tip, unit, key) in zip(st.columns(2), panels):
                 with col:
                     st.subheader(title)
                     fig = go.Figure()
@@ -1437,7 +1568,8 @@ with tab_crisis:
                                 width=2,
                                 dash='dot' if name == 'normal' else 'solid',
                             ),
-                            hovertemplate=hover,
+                            customdata=crisis_tips[name][tip],
+                            hovertemplate=TIP,
                         )
                         if name in stopped:  # 위험 온도에 닿아 멈춘 지점
                             fig.add_scatter(
